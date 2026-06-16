@@ -1,0 +1,23 @@
+# Mycelium Monorepo Python Dependencies
+# Install globally or in virtualenv: pip install -r requirements.txt
+
+# Compiler & CLI
+click>=8.1.0
+typer>=0.9.0
+
+# SDK
+requests>=2.31.0
+
+# Backend FastAPI
+fastapi>=0.110.0
+uvicorn>=0.28.0
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.9
+cryptography>=42.0.0
+
+# Development and Testing
+pytest>=8.0.0
+mock>=5.1.0
