@@ -1,13 +1,27 @@
 import sys
+import os
 import argparse
-from mycelium_compiler.parser import MyceliumCompilerVisitor
+from mycelium_compiler.parser import parse_source
 from mycelium_compiler.validator import validate_ast
 from mycelium_compiler.codegen import generate_wasm
 
 def compile_file(source_path: str, output_path: str):
     print(f"Compiling {source_path} to {output_path}...")
-    # TODO: Read file, parse AST, validate types, generate WASM
-    pass
+    with open(source_path, "r") as f:
+        source_code = f.read()
+    
+    visitor = parse_source(source_code)
+    validate_ast(visitor)
+    wasm_bytes = generate_wasm(visitor)
+    
+    # Ensure directory exists and write WASM
+    output_dir = os.path.dirname(output_path)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        
+    with open(output_path, "wb") as f_out:
+        f_out.write(wasm_bytes)
+    print("Compilation successful!")
 
 def main():
     parser = argparse.ArgumentParser(description="Mycelium Compiler CLI")
@@ -19,3 +33,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

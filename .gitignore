@@ -57,3 +57,7 @@ ide/frontend/out/
 # System Files
 .DS_Store
 Thumbs.db
+
+# Firebase Service Keys
+*firebase-key.json
+*-firebase-adminsdk-*.json

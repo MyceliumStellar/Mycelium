@@ -24,10 +24,11 @@ def compile_in_host_sandbox(source_code: str) -> dict:
             "-o", output_wasm_path
         ]
         
-        # Setup environment containing compiler imports
+        # Setup environment containing compiler and mycelium package imports
         env = os.environ.copy()
-        # Ensure compiler is in pythonpath
-        env["PYTHONPATH"] = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "compiler"))
+        compiler_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "compiler"))
+        workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        env["PYTHONPATH"] = os.path.pathsep.join([compiler_path, workspace_root])
         
         res = subprocess.run(cmd, capture_output=True, text=True, env=env)
         
