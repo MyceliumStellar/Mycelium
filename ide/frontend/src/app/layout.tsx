@@ -15,8 +15,8 @@ const techMono = Share_Tech_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Mycelium Web IDE",
-  description: "Python-first developer sandbox for Stellar Soroban contract orchestration",
+  title: "Mycelium | Python-to-Soroban Web IDE",
+  description: "A Python-first framework for smart contract development and agentic orchestration on the Stellar network",
 };
 
 export default function RootLayout({
