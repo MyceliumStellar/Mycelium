@@ -589,6 +589,12 @@ def ensure_stellar_cli() -> str:
     import urllib.request
     import tarfile
     
+    # Detect platform
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+    
+    stellar_bin_name = "stellar.exe" if "windows" in system else "stellar"
+    
     # 1. Check system PATH
     system_stellar = shutil.which("stellar")
     if system_stellar:
@@ -597,29 +603,27 @@ def ensure_stellar_cli() -> str:
     # 2. Check local bin directory in the compiler folder
     current_dir = os.path.dirname(os.path.abspath(__file__))
     local_bin_dir = os.path.join(current_dir, "bin")
-    local_stellar = os.path.join(local_bin_dir, "stellar")
+    local_stellar = os.path.join(local_bin_dir, stellar_bin_name)
     if os.path.exists(local_stellar):
         return local_stellar
         
     # 3. Download precompiled binary if missing
     os.makedirs(local_bin_dir, exist_ok=True)
     
-    # Detect platform
-    system = platform.system().lower()
-    machine = platform.machine().lower()
-    
     version = "22.0.1"
     
     # Map platform/architecture to release files
-    if system == "linux" and "86" in machine: # x86_64
+    if "windows" in system and ("86" in machine or "amd64" in machine):
+        filename = f"stellar-cli-{version}-x86_64-pc-windows-msvc.zip"
+    elif "linux" in system and "86" in machine: # x86_64
         filename = f"stellar-cli-{version}-x86_64-unknown-linux-gnu.tar.gz"
-    elif system == "darwin": # macOS
+    elif "darwin" in system or "mac" in system: # macOS
         if "arm" in machine or "aarch" in machine:
             filename = f"stellar-cli-{version}-aarch64-apple-darwin.tar.gz"
         else:
             filename = f"stellar-cli-{version}-x86_64-apple-darwin.tar.gz"
     else:
-        print("[Stellar CLI Bootstrapper] Unsupported platform/architecture for auto-download. Using fallback 'stellar'.")
+        print(f"[Stellar CLI Bootstrapper] Unsupported platform ({system}) / architecture ({machine}) for auto-download. Using fallback 'stellar'.")
         return "stellar"
         
     url = f"https://github.com/stellar/stellar-cli/releases/download/v{version}/{filename}"
@@ -636,9 +640,12 @@ def ensure_stellar_cli() -> str:
             if filename.endswith(".tar.gz"):
                 with tarfile.open(archive_path, "r:gz") as tar:
                     tar.extractall(path=tmpdir)
+            elif filename.endswith(".zip"):
+                import zipfile
+                with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+                    zip_ref.extractall(tmpdir)
                     
             # Locate binary inside the extracted contents
-            stellar_bin_name = "stellar"
             found_path = None
             for root, dirs, files in os.walk(tmpdir):
                 if stellar_bin_name in files:
@@ -647,11 +654,12 @@ def ensure_stellar_cli() -> str:
                     
             if found_path and os.path.exists(found_path):
                 shutil.copy2(found_path, local_stellar)
-                os.chmod(local_stellar, 0o755) # Make executable
+                if "windows" not in system:
+                    os.chmod(local_stellar, 0o755) # Make executable on Unix
                 print(f"[Stellar CLI Bootstrapper] Successfully installed stellar-cli at {local_stellar}")
                 return local_stellar
             else:
-                raise FileNotFoundError("Could not find 'stellar' binary in extracted archive")
+                raise FileNotFoundError(f"Could not find '{stellar_bin_name}' binary in extracted archive")
                 
     except Exception as e:
         print(f"[Stellar CLI Bootstrapper] Failed to download or install stellar-cli: {e}. Using fallback 'stellar'.")
