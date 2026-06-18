@@ -49,10 +49,41 @@ def map_type(type_str: str) -> str:
         parts = [p.strip() for p in inner.rsplit(",", 1)]
         return f"soroban_sdk::Vec<{map_type(parts[0])}>"
         
+    if type_str.startswith("Vec[") and type_str.endswith("]"):
+        inner = type_str[4:-1]
+        return f"soroban_sdk::Vec<{map_type(inner)}>"
+        
+    if type_str.startswith("List[") and type_str.endswith("]"):
+        inner = type_str[5:-1]
+        return f"soroban_sdk::Vec<{map_type(inner)}>"
+        
+    if type_str.startswith("list[") and type_str.endswith("]"):
+        inner = type_str[5:-1]
+        return f"soroban_sdk::Vec<{map_type(inner)}>"
+        
     if type_str.startswith("Mapping[") and type_str.endswith("]"):
         inner = type_str[8:-1]
         parts = [p.strip() for p in inner.split(",", 1)]
         return f"soroban_sdk::Map<{map_type(parts[0])}, {map_type(parts[1])}>"
+        
+    if type_str.startswith("Map[") and type_str.endswith("]"):
+        inner = type_str[4:-1]
+        parts = [p.strip() for p in inner.split(",", 1)]
+        return f"soroban_sdk::Map<{map_type(parts[0])}, {map_type(parts[1])}>"
+        
+    if type_str.startswith("dict[") and type_str.endswith("]"):
+        inner = type_str[5:-1]
+        parts = [p.strip() for p in inner.split(",", 1)]
+        return f"soroban_sdk::Map<{map_type(parts[0])}, {map_type(parts[1])}>"
+        
+    if type_str == "Bytes":
+        return "soroban_sdk::Bytes"
+        
+    if type_str == "Map":
+        return "soroban_sdk::Map"
+        
+    if type_str == "Vec":
+        return "soroban_sdk::Vec"
         
     if type_str.startswith("(") and type_str.endswith(")"):
         inner = type_str[1:-1]
@@ -62,12 +93,24 @@ def map_type(type_str: str) -> str:
     return type_str
 
 
-def get_mapping_leaf_type(type_str: str) -> str:
+
+def get_subscript_type(type_str: str, num_keys: int) -> str:
     type_str = type_str.strip()
-    while type_str.startswith("Mapping[") and type_str.endswith("]"):
-        inner = type_str[8:-1]
-        parts = [p.strip() for p in inner.split(",", 1)]
-        type_str = parts[1]
+    for _ in range(num_keys):
+        if type_str.startswith("Mapping[") and type_str.endswith("]"):
+            inner = type_str[8:-1]
+            parts = [p.strip() for p in inner.split(",", 1)]
+            type_str = parts[1]
+        elif type_str.startswith("Map[") and type_str.endswith("]"):
+            inner = type_str[4:-1]
+            parts = [p.strip() for p in inner.split(",", 1)]
+            type_str = parts[1]
+        elif type_str.startswith("dict[") and type_str.endswith("]"):
+            inner = type_str[5:-1]
+            parts = [p.strip() for p in inner.split(",", 1)]
+            type_str = parts[1]
+        else:
+            break
     return type_str
 
 
@@ -137,7 +180,7 @@ class RustTranspiler(ast.NodeVisitor):
             if attr and attr in self.state_variables:
                 var_info = self.state_variables[attr]
                 var_type = var_info.get("type", "")
-                leaf_type = get_mapping_leaf_type(var_type)
+                leaf_type = get_subscript_type(var_type, len(keys))
                 return map_type(leaf_type) == "U256"
         elif isinstance(node, ast.BinOp):
             return self.is_u256_type(node.left) or self.is_u256_type(node.right)
@@ -177,6 +220,14 @@ class RustTranspiler(ast.NodeVisitor):
                 return str(node.value)
             elif isinstance(node.value, str):
                 return f'Symbol::new(&env, "{node.value}")'
+            elif isinstance(node.value, bytes):
+                try:
+                    decoded = node.value.decode('utf-8')
+                    escaped = decoded.replace('"', '\\"')
+                    return f'b"{escaped}"'
+                except UnicodeDecodeError:
+                    escaped = "".join(f"\\x{b:02x}" for b in node.value)
+                    return f'b"{escaped}"'
             return str(node.value)
         elif isinstance(node, ast.Tuple):
             # Transpile each element of the tuple
@@ -205,10 +256,16 @@ class RustTranspiler(ast.NodeVisitor):
             if attr:
                 var_info = self.state_variables.get(attr, {})
                 var_type = var_info.get("type", "Symbol")
-                leaf_type = get_mapping_leaf_type(var_type)
+                leaf_type = get_subscript_type(var_type, len(keys))
                 leaf_rust_type = map_type(leaf_type)
                 
-                transpiled_keys = [self.transpile_expr(k) for k in keys]
+                transpiled_keys = []
+                for k in keys:
+                    k_str = self.transpile_expr(k)
+                    if k_str.endswith(".clone()"):
+                        transpiled_keys.append(k_str)
+                    else:
+                        transpiled_keys.append(f"{k_str}.clone()")
                 key_tuple_elements = [f'Symbol::new(&env, "{attr}")'] + transpiled_keys
                 key_tuple_str = f"({', '.join(key_tuple_elements)},)" if len(key_tuple_elements) == 1 else f"({', '.join(key_tuple_elements)})"
                 
@@ -220,17 +277,53 @@ class RustTranspiler(ast.NodeVisitor):
                 else:
                     return f"{get_expr}.unwrap()"
             else:
-                return ast.unparse(node)
+                value_str = self.transpile_expr(node.value)
+                key_str = self.transpile_expr(node.slice)
+                return f"{value_str}.get({key_str}).unwrap()"
         elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Attribute) and node.func.attr == 'append':
+                if isinstance(node.func.value, ast.Name):
+                    base_str = escape_keyword(node.func.value.id)
+                else:
+                    base_str = self.transpile_expr(node.func.value)
+                if base_str.endswith(".clone()"):
+                    base_str = base_str[:-8]
+                arg_str = self.transpile_expr(node.args[0])
+                return f"{base_str}.push_back({arg_str})"
+                
+            if isinstance(node.func, ast.Name):
+                func_name = node.func.id
+                if func_name == 'Symbol':
+                    if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                        return f'Symbol::new(&env, "{node.args[0].value}")'
+                    elif node.args:
+                        arg_str = self.transpile_expr(node.args[0])
+                        return f'Symbol::new(&env, &{arg_str})'
+                elif func_name == 'Map' and not node.args:
+                    return 'soroban_sdk::Map::new(&env)'
+                elif func_name == 'Vec' and not node.args:
+                    return 'soroban_sdk::Vec::new(&env)'
+                elif func_name == 'Bytes' and not node.args:
+                    return 'soroban_sdk::Bytes::new(&env)'
+                elif func_name == 'Bytes' and len(node.args) == 1:
+                    arg_str = self.transpile_expr(node.args[0])
+                    return f'soroban_sdk::Bytes::from_slice(&env, {arg_str})'
+                elif func_name == 'Address' and len(node.args) == 1:
+                    if isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                        return f'soroban_sdk::Address::from_string(&soroban_sdk::String::from_str(&env, "{node.args[0].value}"))'
+                    else:
+                        arg_str = self.transpile_expr(node.args[0])
+                        return f'soroban_sdk::Address::from_string(&soroban_sdk::String::from_str(&env, &{arg_str}))'
+            
             is_event = False
             func_name = None
             if isinstance(node.func, ast.Name):
                 func_name = node.func.id
-                if func_name in self.events or func_name[0].isupper():
+                if func_name in self.events or (func_name[0].isupper() and func_name not in ("Bytes", "Map", "Vec", "Symbol", "Address", "U256")):
                     is_event = True
             elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name) and node.func.value.id == 'self':
                 func_name = node.func.attr
-                if func_name in self.events or func_name[0].isupper():
+                if func_name in self.events or (func_name[0].isupper() and func_name not in ("Bytes", "Map", "Vec", "Symbol", "Address", "U256")):
                     is_event = True
                     
             if is_event and func_name:
@@ -361,6 +454,12 @@ class RustTranspiler(ast.NodeVisitor):
                 return "U256"
             elif isinstance(node.value, str):
                 return "Symbol"
+        elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name):
+                if node.func.id == "Map":
+                    return "soroban_sdk::Map"
+                elif node.func.id == "Vec":
+                    return "soroban_sdk::Vec"
         elif isinstance(node, ast.Name):
             return self.local_var_types.get(node.id, "Symbol")
         elif isinstance(node, ast.Attribute):
@@ -371,7 +470,7 @@ class RustTranspiler(ast.NodeVisitor):
             attr, keys = flatten_subscript(node)
             if attr and attr in self.state_variables:
                 var_info = self.state_variables[attr]
-                return map_type(get_mapping_leaf_type(var_info.get("type", "")))
+                return map_type(get_subscript_type(var_info.get("type", ""), len(keys)))
         return "Symbol"
 
     def transpile_stmt(self, node):
@@ -384,10 +483,23 @@ class RustTranspiler(ast.NodeVisitor):
             elif isinstance(target, ast.Subscript):
                 attr, keys = flatten_subscript(target)
                 if attr:
-                    transpiled_keys = [f"{self.transpile_expr(k)}.clone()" for k in keys]
+                    transpiled_keys = []
+                    for k in keys:
+                        k_str = self.transpile_expr(k)
+                        if k_str.endswith(".clone()"):
+                            transpiled_keys.append(k_str)
+                        else:
+                            transpiled_keys.append(f"{k_str}.clone()")
                     key_tuple_elements = [f'Symbol::new(&env, "{attr}")'] + transpiled_keys
                     key_tuple_str = f"({', '.join(key_tuple_elements)},)" if len(key_tuple_elements) == 1 else f"({', '.join(key_tuple_elements)})"
                     return f"env.storage().instance().set(&{key_tuple_str}, &({val_str}));"
+                else:
+                    if isinstance(target.value, ast.Name):
+                        base_str = escape_keyword(target.value.id)
+                    else:
+                        base_str = self.transpile_expr(target.value)
+                    key_str = self.transpile_expr(target.slice)
+                    return f"{base_str}.set({key_str}, {val_str});"
             elif isinstance(target, ast.Name):
                 var_name = escape_keyword(target.id)
                 expr_type = self.get_expr_type(node.value)
@@ -415,10 +527,23 @@ class RustTranspiler(ast.NodeVisitor):
             elif isinstance(target, ast.Subscript):
                 attr, keys = flatten_subscript(target)
                 if attr:
-                    transpiled_keys = [f"{self.transpile_expr(k)}.clone()" for k in keys]
+                    transpiled_keys = []
+                    for k in keys:
+                        k_str = self.transpile_expr(k)
+                        if k_str.endswith(".clone()"):
+                            transpiled_keys.append(k_str)
+                        else:
+                            transpiled_keys.append(f"{k_str}.clone()")
                     key_tuple_elements = [f'Symbol::new(&env, "{attr}")'] + transpiled_keys
                     key_tuple_str = f"({', '.join(key_tuple_elements)},)" if len(key_tuple_elements) == 1 else f"({', '.join(key_tuple_elements)})"
                     return f"env.storage().instance().set(&{key_tuple_str}, &({val_str}));"
+                else:
+                    if isinstance(target.value, ast.Name):
+                        base_str = escape_keyword(target.value.id)
+                    else:
+                        base_str = self.transpile_expr(target.value)
+                    key_str = self.transpile_expr(target.slice)
+                    return f"{base_str}.set({key_str}, {val_str});"
             elif isinstance(target, ast.Name):
                 var_name = escape_keyword(target.id)
                 self.local_var_types[target.id] = annotated_type
@@ -438,10 +563,23 @@ class RustTranspiler(ast.NodeVisitor):
             elif isinstance(target, ast.Subscript):
                 attr, keys = flatten_subscript(target)
                 if attr:
-                    transpiled_keys = [f"{self.transpile_expr(k)}.clone()" for k in keys]
+                    transpiled_keys = []
+                    for k in keys:
+                        k_str = self.transpile_expr(k)
+                        if k_str.endswith(".clone()"):
+                            transpiled_keys.append(k_str)
+                        else:
+                            transpiled_keys.append(f"{k_str}.clone()")
                     key_tuple_elements = [f'Symbol::new(&env, "{attr}")'] + transpiled_keys
                     key_tuple_str = f"({', '.join(key_tuple_elements)},)" if len(key_tuple_elements) == 1 else f"({', '.join(key_tuple_elements)})"
                     return f"env.storage().instance().set(&{key_tuple_str}, &({val_str}));"
+                else:
+                    if isinstance(target.value, ast.Name):
+                        base_str = escape_keyword(target.value.id)
+                    else:
+                        base_str = self.transpile_expr(target.value)
+                    key_str = self.transpile_expr(target.slice)
+                    return f"{base_str}.set({key_str}, {val_str});"
             elif isinstance(target, ast.Name):
                 var_name = escape_keyword(target.id)
                 return f"{var_name} = {val_str};"
@@ -461,6 +599,16 @@ class RustTranspiler(ast.NodeVisitor):
                 orelse_stmts = [self.transpile_stmt(s) for s in node.orelse]
                 orelse_str = " else {\n        " + "\n        ".join(orelse_stmts) + "\n    }"
             return f"if {test_str} {{\n        {body_str}\n    }}{orelse_str}"
+        elif isinstance(node, ast.For):
+            target_str = self.transpile_expr(node.target)
+            if target_str.endswith(".clone()"):
+                target_str = target_str[:-8]
+            iter_str = self.transpile_expr(node.iter)
+            if iter_str.endswith(".clone()"):
+                iter_str = iter_str[:-8]
+            body_stmts = [self.transpile_stmt(s) for s in node.body]
+            body_str = "\n        ".join(body_stmts)
+            return f"for {target_str} in {iter_str} {{\n        {body_str}\n    }}"
         elif isinstance(node, ast.Assert):
             test_node = node.test
             msg_val = None
@@ -494,7 +642,7 @@ def generate_rust_intermediate(visitor: MyceliumCompilerVisitor) -> str:
     """
     lines = [
         "#![no_std]",
-        "use soroban_sdk::{contract, contractimpl, Env, Symbol, Address, U256};",
+        "use soroban_sdk::{contract, contractimpl, Env, Symbol, Address, U256, Map, Vec, Bytes};",
         "",
         "#[contract]",
         f"pub struct {visitor.contract_name};",
@@ -673,8 +821,15 @@ def generate_wasm(visitor: MyceliumCompilerVisitor) -> bytes:
     """
     rust_code = generate_rust_intermediate(visitor)
     
-    # Create a unique temporary directory
-    temp_dir = os.path.join(tempfile.gettempdir(), f"mycelium_compile_{uuid.uuid4()}")
+    # Create a unique temporary directory or use static workspace inside Docker
+    static_workspace = "/app/mycelium_contract_workspace"
+    is_static = False
+    if os.path.exists(static_workspace):
+        temp_dir = static_workspace
+        is_static = True
+    else:
+        temp_dir = os.path.join(tempfile.gettempdir(), f"mycelium_compile_{uuid.uuid4()}")
+        
     os.makedirs(os.path.join(temp_dir, "src"), exist_ok=True)
     
     cargo_toml = """[package]
@@ -708,12 +863,31 @@ panic = "abort"
         # Ensure stellar-cli is available (auto-download if missing)
         stellar_bin = ensure_stellar_cli()
         
-        # Run stellar contract build --optimize
-        cmd = [stellar_bin, "contract", "build", "--manifest-path", os.path.join(temp_dir, "Cargo.toml"), "--optimize"]
+        # Run stellar contract build
+        # Run stellar contract build
+        cmd = [stellar_bin, "contract", "build", "--manifest-path", "Cargo.toml"]
         
+        # Prepare target directory and reuse cache if available
+        cache_dir = "/app/cargo_target"
+        if os.path.exists(cache_dir):
+            target_dir = cache_dir
+        else:
+            target_dir = "/tmp/mycelium_cargo_target"
+            os.makedirs(target_dir, exist_ok=True)
+
         env = os.environ.copy()
-        env["CARGO_TARGET_DIR"] = "/tmp/mycelium_cargo_target"
-        res = subprocess.run(cmd, capture_output=True, text=True, env=env)
+        env["CARGO_TARGET_DIR"] = target_dir
+        env["CARGO_NET_OFFLINE"] = "true"
+        
+        print(f"DEBUG: Executing cmd: {cmd} in cwd: {temp_dir}", file=sys.stderr, flush=True)
+        print(f"DEBUG: CARGO_TARGET_DIR={env.get('CARGO_TARGET_DIR')}", file=sys.stderr, flush=True)
+        print(f"DEBUG: CARGO_NET_OFFLINE={env.get('CARGO_NET_OFFLINE')}", file=sys.stderr, flush=True)
+        
+        res = subprocess.run(cmd, capture_output=True, text=True, env=env, cwd=temp_dir)
+        
+        # Log cargo outputs for verification/debugging
+        print(f"--- Cargo STDOUT ---\n{res.stdout}", file=sys.stderr)
+        print(f"--- Cargo STDERR ---\n{res.stderr}", file=sys.stderr)
         
         if res.returncode != 0:
             error_log = f"Rust Compilation Error:\n{res.stderr}\n{res.stdout}"
@@ -721,7 +895,6 @@ panic = "abort"
             raise RuntimeError(error_log)
             
         # Locate the optimized WASM output
-        target_dir = "/tmp/mycelium_cargo_target"
         wasm_path = os.path.join(target_dir, "wasm32v1-none", "release", "mycelium_contract.wasm")
         
         if not os.path.exists(wasm_path):
@@ -736,6 +909,6 @@ panic = "abort"
         return wasm_bytes
         
     finally:
-        # Clean up temporary directory
-        if os.path.exists(temp_dir):
+        # Clean up temporary directory if not a static image workspace
+        if 'is_static' in locals() and not is_static and os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)

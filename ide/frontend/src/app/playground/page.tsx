@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 interface FileItem {
   name: string;
   sha: string;
@@ -216,7 +218,7 @@ export default function Playground() {
   // OAuth Code Exchange
   const exchangeOAuthCode = async (code: string) => {
     try {
-      const res = await fetch(`http://localhost:8000/auth/github/callback?code=${code}`, {
+      const res = await fetch(`${API_BASE_URL}/auth/github/callback?code=${code}`, {
         method: "POST"
       });
       if (res.ok) {
@@ -244,7 +246,7 @@ export default function Playground() {
 
   const handleOAuthLoginRedirect = async () => {
     try {
-      const res = await fetch("http://localhost:8000/auth/github");
+      const res = await fetch(`${API_BASE_URL}/auth/github`);
       if (res.ok) {
         const data = await res.json();
         addTerminalLog("info", "Redirecting to GitHub OAuth portals...");
@@ -280,7 +282,7 @@ export default function Playground() {
     
     if (res.status === 401 && sessionToken) {
       try {
-        const refreshRes = await fetch("http://localhost:8000/auth/refresh", {
+        const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
           method: "POST",
           headers: { "Authorization": `Bearer ${sessionToken}` }
         });
@@ -305,7 +307,7 @@ export default function Playground() {
 
   const fetchWorkspaces = async () => {
     try {
-      const res = await apiFetch("http://localhost:8000/api/workspaces");
+      const res = await apiFetch(`${API_BASE_URL}/api/workspaces`);
       if (res.ok) {
         const data = await res.json();
         setWorkspaces(data);
@@ -322,7 +324,7 @@ export default function Playground() {
 
   const fetchFiles = async (workspaceName: string) => {
     try {
-      const res = await apiFetch(`http://localhost:8000/api/workspaces/${workspaceName}/files`);
+      const res = await apiFetch(`${API_BASE_URL}/api/workspaces/${workspaceName}/files`);
       if (res.ok) {
         const data = await res.json();
         setFiles(data);
@@ -344,7 +346,7 @@ export default function Playground() {
 
   const fetchFileContent = async (workspaceName: string, filename: string) => {
     try {
-      const res = await apiFetch(`http://localhost:8000/api/workspaces/${workspaceName}/files/${filename}`);
+      const res = await apiFetch(`${API_BASE_URL}/api/workspaces/${workspaceName}/files/${filename}`);
       if (res.ok) {
         const data = await res.json();
         const savedDraft = localStorage.getItem(`mycelium_draft_${workspaceName}_${filename}`);
@@ -370,7 +372,7 @@ export default function Playground() {
     if (!activeWorkspace || !activeFile) return;
     try {
       addTerminalLog("info", `Committing changes for ${activeFile} directly to GitHub repository...`);
-      const res = await apiFetch(`http://localhost:8000/api/workspaces/${activeWorkspace}/files`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/workspaces/${activeWorkspace}/files`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json"
@@ -405,7 +407,7 @@ export default function Playground() {
     if (!newWorkspaceName.trim()) return;
     try {
       addTerminalLog("info", `Requesting GitHub to create repository: ${newWorkspaceName}...`);
-      const res = await apiFetch("http://localhost:8000/api/workspaces", {
+      const res = await apiFetch(`${API_BASE_URL}/api/workspaces`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json"
@@ -434,7 +436,7 @@ export default function Playground() {
     }
     try {
       addTerminalLog("info", `Scaffolding file '${filename}' to GitHub...`);
-      const res = await apiFetch(`http://localhost:8000/api/workspaces/${activeWorkspace}/files`, {
+      const res = await apiFetch(`${API_BASE_URL}/api/workspaces/${activeWorkspace}/files`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json"
@@ -492,9 +494,10 @@ export default function Playground() {
     const lines = logs.split("\n");
     const result: { line: number; message: string; type: "error" | "warning"; file: string }[] = [];
     
-    const pythonFileRegex = /File\s+"[^"]+",\s+line\s+(\d+)/i;
+    const pythonFileRegex = /File\s+"([^"]+)",\s+line\s+(\d+)/i;
     const errorTypeRegex = /^(TypeError|ValueError|SyntaxError|NameError|AttributeError|ValidationError):\s*(.*)$/i;
     const validationLineRegex = /(?:ValidationError|TypeError|ValueError):\s*Line\s*(\d+):\s*(.*)/i;
+    const rustErrorLineRegex = /-->\s*src\/lib\.rs:(\d+)(?::(\d+))?/i;
     
     let currentLine: number | null = null;
     
@@ -514,7 +517,11 @@ export default function Playground() {
       
       const fileMatch = lineStr.match(pythonFileRegex);
       if (fileMatch) {
-        currentLine = parseInt(fileMatch[1], 10);
+        const filePath = fileMatch[1];
+        // Only map if it's not a compiler system file
+        if (!filePath.includes("runpy") && !filePath.includes("main.py") && !filePath.includes("codegen.py") && !filePath.includes("parser.py")) {
+          currentLine = parseInt(fileMatch[2], 10);
+        }
         continue;
       }
       
@@ -535,10 +542,43 @@ export default function Playground() {
     }
     
     if (result.length === 0) {
+      for (let i = 0; i < lines.length; i++) {
+        const lineStr = lines[i].trim();
+        const rustMatch = lineStr.match(rustErrorLineRegex);
+        if (rustMatch) {
+          const rustLine = parseInt(rustMatch[1], 10);
+          let message = "Rust Compilation Error";
+          let type: "error" | "warning" = "error";
+          for (let j = i - 1; j >= Math.max(0, i - 4); j--) {
+            const prevLine = lines[j].trim();
+            if (prevLine.startsWith("error:") || prevLine.startsWith("error[")) {
+              message = prevLine;
+              type = "error";
+              break;
+            } else if (prevLine.startsWith("warning:") || prevLine.startsWith("warning[")) {
+              message = prevLine;
+              type = "warning";
+              break;
+            }
+          }
+          result.push({
+            line: rustLine,
+            message: message,
+            type: type,
+            file: activeFile || "contract.py"
+          });
+        }
+      }
+    }
+    
+    if (result.length === 0) {
       const lineNumMatch = logs.match(/(?:line|Line)\s*(\d+)/);
       if (lineNumMatch) {
+        const hasTraceback = logs.includes("Traceback (most recent call last)");
+        const line = hasTraceback ? 1 : parseInt(lineNumMatch[1], 10);
+        
         result.push({
-          line: parseInt(lineNumMatch[1], 10),
+          line: line,
           message: logs.split("\n").filter(l => l.includes("Error") || l.includes("Failed") || l.includes("unsupported")).join(" ") || "Compilation Failed",
           type: "error",
           file: activeFile || "contract.py"
@@ -722,7 +762,7 @@ export default function Playground() {
         addTerminalLog("info", "  Mycelium core:  v0.1.0-alpha");
         addTerminalLog("info", "  Next.js Build:  v16.2.9");
         addTerminalLog("info", "  React Fiber:    v19.0.0");
-        addTerminalLog("info", "  Backend API:    FastAPI on http://localhost:8000");
+        addTerminalLog("info", `  Backend API:    FastAPI on ${API_BASE_URL}`);
         addTerminalLog("info", `  Active User:    ${username || "Anonymous"}`);
         break;
         
@@ -793,7 +833,7 @@ export default function Playground() {
     addCompilerLog("info", "Executing local Abstract Syntax Tree (AST) parsing...");
 
     try {
-      const res = await fetch("http://localhost:8000/compile", {
+      const res = await fetch(`${API_BASE_URL}/compile`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filename: activeFile, source_code: editorContent })
@@ -1676,7 +1716,7 @@ export default function Playground() {
                     onClick={async () => {
                       if (githubTokenBypass.trim().startsWith("github_pat_")) {
                         try {
-                          const res = await fetch(`http://localhost:8000/auth/github/callback?code=${githubTokenBypass.trim()}`, {
+                          const res = await fetch(`${API_BASE_URL}/auth/github/callback?code=${githubTokenBypass.trim()}`, {
                             method: "POST"
                           });
                           if (res.ok) {

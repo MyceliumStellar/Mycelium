@@ -1,8 +1,10 @@
 import sys
 import os
 
-# Ensure project root is in PYTHONPATH so 'ide' module imports resolve correctly
+# Ensure project root and subdirectories are in sys.path so imports resolve correctly
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "compiler")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "sdk")))
 
 from fastapi import FastAPI, Depends, HTTPException, Header, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -366,3 +368,97 @@ async def compile_endpoint(req: CompileRequest):
         
     logs = f"--- STDOUT ---\n{res['stdout']}\n--- STDERR ---\n{res['stderr']}"
     return CompileResponse(success=res["success"], wasm_base64=wasm_b64, logs=logs)
+
+class DeployRequest(BaseModel):
+    wasm_base64: str
+    network: Optional[str] = "testnet" # "testnet" or "mainnet"
+    secret_key: Optional[str] = None
+
+@app.post("/api/deploy")
+def deploy_contract_endpoint(req: DeployRequest):
+    import tempfile
+    import base64
+    from mycelium_compiler.codegen import ensure_stellar_cli
+    
+    # 1. Decode WASM base64
+    try:
+        wasm_bytes = base64.b64decode(req.wasm_base64)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid base64 encoding: {e}")
+        
+    # 2. Setup Network and RPC parameters
+    is_testnet = req.network == "testnet"
+    if is_testnet:
+        rpc_url = "https://soroban-testnet.stellar.org"
+        network_passphrase = "Test SDF Network ; September 2015"
+    else:
+        rpc_url = "https://mainnet.sorobanrpc.com"
+        network_passphrase = "Public Global Stellar Network ; September 2015"
+        
+    # 3. Resolve Secret Key (Generate and Friendbot-fund if missing on Testnet)
+    secret_key = req.secret_key
+    address = None
+    generated = False
+    
+    if not secret_key:
+        if not is_testnet:
+            raise HTTPException(status_code=400, detail="Secret key is required for mainnet deployment")
+        try:
+            from stellar_sdk import Keypair
+            kp = Keypair.random()
+            secret_key = kp.secret
+            address = kp.public_key
+            generated = True
+            
+            # Fund via Friendbot
+            friendbot_res = requests.get(f"https://friendbot.stellar.org/?addr={address}", timeout=15)
+            if not friendbot_res.ok:
+                raise RuntimeError("Friendbot response was not OK")
+            
+            # Wait for ledger commitment (Friendbot transactions take ~3-4 seconds to clear)
+            import time
+            time.sleep(4)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to generate and fund temporary account: {e}")
+            
+    # 4. Save WASM bytes to a temp file
+    with tempfile.NamedTemporaryFile(suffix=".wasm", delete=False) as tmp:
+        tmp.write(wasm_bytes)
+        wasm_path = tmp.name
+        
+    try:
+        # Resolve stellar CLI binary path (utilizes the auto-bootstrapper!)
+        stellar_bin = ensure_stellar_cli()
+        
+        cmd = [
+            stellar_bin, "contract", "deploy",
+            "--wasm", wasm_path,
+            "--source-account", secret_key,
+            "--rpc-url", rpc_url,
+            "--network-passphrase", network_passphrase
+        ]
+        
+        # Run deployment with 45-second timeout (transaction simulation/submission can take a few seconds)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
+        
+        if res.returncode != 0:
+            raise RuntimeError(f"Stellar CLI deploy failed:\nStdout: {res.stdout}\nStderr: {res.stderr}")
+            
+        contract_id = res.stdout.strip()
+        
+        response = {
+            "success": True,
+            "contract_id": contract_id,
+            "network": req.network
+        }
+        if generated:
+            response["generated_address"] = address
+            response["generated_secret"] = secret_key
+            
+        return response
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if os.path.exists(wasm_path):
+            os.remove(wasm_path)

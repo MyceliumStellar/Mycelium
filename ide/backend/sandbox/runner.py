@@ -1,46 +1,8 @@
-import subprocess
-import tempfile
-import os
-import sys
+from ide.backend.sandbox.docker_runner import compile_in_docker_sandbox
 
 def compile_in_host_sandbox(source_code: str) -> dict:
     """
-    Executes mycelium compilation in an isolated workspace path on the host.
+    Executes compilation inside the containerized Docker sandbox.
+    Keeps legacy function name intact to prevent breaking backend routing imports.
     """
-    # Create a temporary directory to act as the build sandbox
-    with tempfile.TemporaryDirectory() as tmpdir:
-        source_file_path = os.path.join(tmpdir, "contract.py")
-        output_wasm_path = os.path.join(tmpdir, "target.wasm")
-        
-        with open(source_file_path, "w") as f:
-            f.write(source_code)
-            
-        # Execute mycelium CLI compile command using subprocess
-        # Python interpreter running compiler main
-        cmd = [
-            sys.executable,
-            "-m", "mycelium_compiler.main",
-            source_file_path,
-            "-o", output_wasm_path
-        ]
-        
-        # Setup environment containing compiler and mycelium package imports
-        env = os.environ.copy()
-        compiler_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "compiler"))
-        workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-        env["PYTHONPATH"] = os.path.pathsep.join([compiler_path, workspace_root])
-        
-        res = subprocess.run(cmd, capture_output=True, text=True, env=env)
-        
-        success = res.returncode == 0
-        wasm_bytes = b""
-        if success and os.path.exists(output_wasm_path):
-            with open(output_wasm_path, "rb") as f_wasm:
-                wasm_bytes = f_wasm.read()
-                
-        return {
-            "success": success,
-            "wasm_bytes": wasm_bytes,
-            "stdout": res.stdout,
-            "stderr": res.stderr
-        }
+    return compile_in_docker_sandbox(source_code)

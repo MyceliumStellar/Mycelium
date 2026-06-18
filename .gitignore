@@ -64,3 +64,6 @@ Thumbs.db
 
 # Downloaded compiler binaries
 compiler/mycelium_compiler/bin/
+
+# Temporary developer scratch scripts
+scratch/

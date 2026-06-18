@@ -34,7 +34,30 @@ if [ ! -d "ide/frontend/node_modules" ]; then
     cd ../..
 fi
 
-# 3. Check and resolve port binding conflicts
+# 3. Check Docker and Build Compiler Image
+if ! command -v docker &> /dev/null; then
+    echo -e "\033[1;31m[Error]\033[0m 'docker' is not installed or not in PATH."
+    echo -e "Please install Docker to enable the isolated compilation sandbox."
+    exit 1
+fi
+
+if ! docker info &> /dev/null; then
+    echo -e "\033[1;31m[Error]\033[0m Docker daemon is not running or current user lacks permissions."
+    echo -e "Please start the Docker daemon (e.g., sudo systemctl start docker)."
+    exit 1
+fi
+
+if [[ "$(docker images -q mycelium-compiler:latest 2> /dev/null)" == "" ]]; then
+    echo -e "\033[1;36m[System]\033[0m Building 'mycelium-compiler:latest' Docker image (this will cache dependencies)..."
+    docker build -t mycelium-compiler:latest -f compiler/Dockerfile .
+    if [ $? -ne 0 ]; then
+        echo -e "\033[1;31m[Error]\033[0m Failed to build compiler Docker image."
+        exit 1
+    fi
+    echo -e "\033[1;32m[Success]\033[0m Compiler Docker image built successfully!"
+fi
+
+# 4. Check and resolve port binding conflicts
 PORT_8000_PIDS=$(lsof -t -i :8000 2>/dev/null | tr '\n' ' ')
 if [ ! -z "$PORT_8000_PIDS" ]; then
     echo -e "\033[1;33m[Warning]\033[0m Port 8000 (Backend) is in use by PID(s): $PORT_8000_PIDS. Terminating conflicting process(es)..."
@@ -60,7 +83,7 @@ echo -e "\033[1;36m[System]\033[0m Launching Mycelium services..."
 # 4. Start FastAPI Backend
 echo -e "\033[1;34m[Backend]\033[0m Starting FastAPI gateway server on http://localhost:8000..."
 cd ide/backend
-../../venv/bin/uvicorn main:app --port 8000 --reload &
+PYTHONPATH="../../compiler:../../sdk:../..:$PYTHONPATH" ../../venv/bin/uvicorn main:app --port 8000 --reload &
 BACKEND_PID=$!
 cd ../..
 
