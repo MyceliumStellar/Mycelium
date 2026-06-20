@@ -3,14 +3,14 @@
 import React from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { 
-  Code2, 
-  Search, 
-  Coins, 
-  Terminal as CliIcon, 
-  Laptop, 
-  Layers, 
-  Cpu, 
+import {
+  Code2,
+  Search,
+  Coins,
+  Terminal as CliIcon,
+  Laptop,
+  Layers,
+  Cpu,
   ArrowRight,
   ExternalLink,
   ChevronRight
@@ -40,14 +40,14 @@ const SporesSVG = () => (
     boxShadow: "0 4px 10px rgba(0,0,0,0.15)"
   }}>
     <svg width="80" height="32" viewBox="0 0 80 32" fill="none">
-      <circle cx="15" cy="10" r="1.2" fill="#ffffff" opacity="0.2"/>
-      <circle cx="40" cy="20" r="1.8" fill="#ffffff" opacity="0.4"/>
-      <circle cx="65" cy="8" r="1.2" fill="#ffffff" opacity="0.2"/>
-      <circle cx="25" cy="24" r="0.8" fill="#ffffff" opacity="0.15"/>
-      <line x1="15" y1="10" x2="40" y2="20" stroke="#ffffff" strokeWidth="0.5" opacity="0.15"/>
-      <line x1="40" y1="20" x2="65" y2="8" stroke="#ffffff" strokeWidth="0.5" opacity="0.2"/>
-      <circle cx="25" cy="15" r="1.2" fill="var(--accent-cyan)"/>
-      <circle cx="50" cy="14" r="1.2" fill="var(--accent-purple)"/>
+      <circle cx="15" cy="10" r="1.2" fill="#ffffff" opacity="0.2" />
+      <circle cx="40" cy="20" r="1.8" fill="#ffffff" opacity="0.4" />
+      <circle cx="65" cy="8" r="1.2" fill="#ffffff" opacity="0.2" />
+      <circle cx="25" cy="24" r="0.8" fill="#ffffff" opacity="0.15" />
+      <line x1="15" y1="10" x2="40" y2="20" stroke="#ffffff" strokeWidth="0.5" opacity="0.15" />
+      <line x1="40" y1="20" x2="65" y2="8" stroke="#ffffff" strokeWidth="0.5" opacity="0.2" />
+      <circle cx="25" cy="15" r="1.2" fill="var(--accent-cyan)" />
+      <circle cx="50" cy="14" r="1.2" fill="var(--accent-purple)" />
     </svg>
   </span>
 );
@@ -68,10 +68,10 @@ const ChartSVG = () => (
     boxShadow: "0 4px 10px rgba(0,0,0,0.15)"
   }}>
     <svg width="96" height="32" viewBox="0 0 96 32" fill="none">
-      <path d="M8 22 L24 12 L44 18 L64 8 L88 10" stroke="var(--accent-cyan)" strokeWidth="0.85" opacity="0.75"/>
+      <path d="M8 22 L24 12 L44 18 L64 8 L88 10" stroke="var(--accent-cyan)" strokeWidth="0.85" opacity="0.75" />
       <text x="10" y="9" fill="#ffffff" opacity="0.35" fontSize="5.5" fontFamily="monospace">SOROBAN/XLM</text>
       <text x="54" y="26" fill="#ffffff" opacity="0.5" fontSize="5.5" fontFamily="monospace">1.2s LATENCY</text>
-      <line x1="8" y1="28" x2="88" y2="28" stroke="#ffffff" strokeWidth="0.5" opacity="0.1"/>
+      <line x1="8" y1="28" x2="88" y2="28" stroke="#ffffff" strokeWidth="0.5" opacity="0.1" />
     </svg>
   </span>
 );
@@ -303,7 +303,7 @@ export default function Home() {
             marginBottom: "24px",
             fontFamily: "var(--font-display)"
           }}>
-            Build Autonomous Agents.
+            Every Agent Needs a Wallet.
           </h1>
 
           {/* Subheadline */}
@@ -312,24 +312,12 @@ export default function Home() {
             color: "rgba(255, 255, 255, 0.9)",
             lineHeight: "1.5",
             maxWidth: "720px",
-            margin: "0 auto 16px auto",
+            margin: "0 auto 40px auto",
             fontWeight: 500,
             fontFamily: "var(--font-sans)"
           }}>
             The Python-first framework for creating agents that discover, coordinate, and transact on Stellar.
           </h2>
-
-          {/* Paragraph */}
-          <p style={{
-            fontSize: "clamp(0.95rem, 1.8vw, 1.1rem)",
-            color: "rgba(255, 255, 255, 0.65)",
-            lineHeight: "1.6",
-            maxWidth: "680px",
-            margin: "0 auto 40px auto",
-            fontWeight: 300
-          }}>
-            Create intelligent systems using familiar Python. Deploy on-chain, connect to agent networks, and enable autonomous commerce.
-          </p>
 
           {/* Actions */}
           <div style={{
@@ -338,7 +326,7 @@ export default function Home() {
             alignItems: "center",
             justifyContent: "center",
             gap: "16px",
-            marginBottom: "28px"
+            marginBottom: "80px"
           }}>
             <Link href="/playground" className="premium-button-primary">
               Launch Playground
@@ -347,34 +335,6 @@ export default function Home() {
             <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="premium-button-secondary">
               Read SDK Docs
             </a>
-          </div>
-
-          {/* Taglines */}
-          <div style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "8px",
-            marginBottom: "80px"
-          }}>
-            <div style={{
-              fontSize: "1.05rem",
-              fontWeight: 600,
-              color: "var(--accent-cyan)",
-              letterSpacing: "0.5px",
-              fontFamily: "var(--font-sans)",
-              textShadow: "0 0 10px rgba(0, 150, 199, 0.2)"
-            }}>
-              Every Agent Needs a Wallet.
-            </div>
-            <div style={{
-              fontSize: "0.85rem",
-              fontFamily: "var(--font-mono)",
-              color: "rgba(255, 255, 255, 0.4)",
-              letterSpacing: "0.5px"
-            }}>
-              No Rust. No smart contract complexity. Just Python.
-            </div>
           </div>
         </div>
 
@@ -495,7 +455,7 @@ export default function Home() {
             gap: "24px"
           }}>
             {features.map((feat, idx) => (
-              <div 
+              <div
                 key={idx}
                 className="premium-card"
                 style={{
