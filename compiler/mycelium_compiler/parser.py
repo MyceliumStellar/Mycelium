@@ -8,9 +8,27 @@ class MyceliumCompilerVisitor(ast.NodeVisitor):
         self.events = {}
         self.interfaces = {}
         self.structs = {}
+        self.errors = {}
+        self.const_classes = {}  # className -> {variantName: value}
         self.class_mode = False
+        self.module_constants = {}
 
     def parse(self, tree):
+        # 0. Parse module-level constants
+        self.module_constants = {}
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                target = node.targets[0]
+                if isinstance(target, ast.Name):
+                    val_node = node.value
+                    if isinstance(val_node, ast.Call) and isinstance(val_node.func, ast.Name) and val_node.func.id in ('U64', 'U128', 'U32', 'I128', 'I32', 'Bool', 'Symbol'):
+                        if val_node.args:
+                            val_node = val_node.args[0]
+                    if isinstance(val_node, ast.Constant):
+                        self.module_constants[target.id] = val_node.value
+                    elif isinstance(val_node, ast.UnaryOp) and isinstance(val_node.op, ast.USub) and isinstance(val_node.operand, ast.Constant):
+                        self.module_constants[target.id] = -val_node.operand.value
+
         # 1. First Pass: Detect if there is a class decorated with @contract
         contract_class_node = None
         for node in tree.body:
@@ -66,12 +84,40 @@ class MyceliumCompilerVisitor(ast.NodeVisitor):
                     if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
                         class_meta["fields"][item.target.id] = ast.unparse(item.annotation)
                 
-                if is_event:
+                if node.name == 'ContractError':
+                    error_meta = {
+                        "name": "ContractError",
+                        "fields": {}
+                    }
+                    for item in node.body:
+                        if isinstance(item, ast.Assign) and len(item.targets) == 1:
+                            target = item.targets[0]
+                            if isinstance(target, ast.Name) and isinstance(item.value, ast.Constant):
+                                error_meta["fields"][target.id] = item.value.value
+                    self.errors = error_meta
+                elif is_event:
                     self.events[node.name] = class_meta
                 elif is_interface:
                     self.interfaces[node.name] = class_meta
                 else:
-                    self.structs[node.name] = class_meta
+                    # Check if this is a constant/enum class (all Name = Constant assignments)
+                    const_variants = {}
+                    is_const_class = True
+                    for item in node.body:
+                        if isinstance(item, ast.Assign) and len(item.targets) == 1:
+                            target = item.targets[0]
+                            if isinstance(target, ast.Name) and isinstance(item.value, ast.Constant):
+                                const_variants[target.id] = item.value.value
+                            else:
+                                is_const_class = False
+                                break
+                        else:
+                            is_const_class = False
+                            break
+                    if is_const_class and const_variants:
+                        self.const_classes[node.name] = const_variants
+                    else:
+                        self.structs[node.name] = class_meta
 
     def parse_state_var(self, node):
         if isinstance(node.target, ast.Name):
