@@ -1,22 +1,9 @@
 import type { Metadata } from "next";
-import { VT323, Share_Tech_Mono } from "next/font/google";
 import "./globals.css";
 
-const vt323 = VT323({
-  variable: "--font-vt323",
-  weight: "400",
-  subsets: ["latin"],
-});
-
-const techMono = Share_Tech_Mono({
-  variable: "--font-tech-mono",
-  weight: "400",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "Mycelium | Python-to-Soroban Web IDE",
-  description: "A Python-first framework for smart contract development and agentic orchestration on the Stellar network",
+  title: "Mycelium | Python Agent Framework on Stellar",
+  description: "The Python-first framework for creating autonomous agents that discover, coordinate, and transact on Stellar.",
 };
 
 export default function RootLayout({
@@ -25,7 +12,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${vt323.variable} ${techMono.variable}`}>
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Share+Tech+Mono&family=Space+Grotesk:wght@300;400;500;700&family=VT323&display=swap" rel="stylesheet" />
+      </head>
       <body>{children}</body>
     </html>
   );

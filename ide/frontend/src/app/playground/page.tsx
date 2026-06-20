@@ -1563,7 +1563,7 @@ export default function Playground() {
   const theme = getThemeColors();
 
   return (
-    <div style={{
+    <div className="retro-theme" style={{
       display: "flex",
       flexDirection: "column",
       width: "100vw",
@@ -2333,8 +2333,7 @@ class MyceliumHiveRegistry:
                       scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
                       lineHeight: 24,
                       cursorBlinking: "blink",
-                      cursorStyle: "block",
-                      background: "#000000"
+                      cursorStyle: "block"
                     }}
                     loading={<div style={{ padding: "20px", color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>Loading Monaco Core...</div>}
                   />
