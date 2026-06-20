@@ -32,21 +32,27 @@ export default function InteractiveTerminal() {
       outputs: [
         "Creating project structure...",
         "  ✓ mycelium.toml created",
-        "  ✓ contracts/agent.py created",
         "  ✓ requirements.txt created",
         "Project initialized successfully."
       ]
     },
     {
+      cmd: "mycelium create research-agent",
+      outputs: [
+        "Creating research-agent template in standard Python...",
+        "  ✓ src/agents/research_agent.py created",
+        "  ✓ config/settings.yaml created"
+      ]
+    },
+    {
       cmd: "mycelium deploy",
       outputs: [
-        "Compiling contracts/agent.py to WebAssembly (Soroban target)...",
-        "WASM binary generated (18.4 kB). Optimizing assembly...",
-        "Uploading bytecode to Stellar Soroban Ledger...",
-        "Instantiating contract ID via source GAB7...R7V4...",
-        "✓ Agent deployed",
-        "  Contract ID: CB6H2K...AS3P (Stellar Testnet)",
-        "  Status: Active & Listening"
+        "Compiling agent to WebAssembly (Soroban target)...",
+        "Uploading bytecode to Stellar Soroban Network...",
+        "✓ Agent deployed to Stellar",
+        "✓ Wallet created",
+        "✓ Registry connected",
+        "✓ Ready for autonomous execution"
       ]
     }
   ];

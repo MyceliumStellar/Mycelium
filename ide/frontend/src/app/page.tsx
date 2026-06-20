@@ -102,38 +102,50 @@ export default function Home() {
   const features = [
     {
       title: "Python First",
+      subtitle: "Build in Python. Deploy to Stellar.",
       icon: <Code2 size={20} />,
-      desc: "Define smart contracts and agent policies in standard, strictly-typed Python. Compile directly to optimized WebAssembly without learning custom DSLs."
+      desc: "Mycelium removes the complexity of blockchain development by allowing developers to create autonomous agents using the language they already know.",
+      list: ["Write logic.", "Deploy agents.", "Scale economies."]
     },
     {
       title: "Agent Registry",
+      subtitle: "Discover Agents. Every agent has an identity.",
       icon: <Search size={20} />,
-      desc: "An on-chain, decentralized directory on the Stellar network. Instantly publish capabilities, query endpoints, and resolve cryptographic identity keys."
+      desc: "The registry transforms isolated agents into an interconnected ecosystem.",
+      list: ["Register capabilities.", "Build reputation.", "Offer services.", "Find collaborators."]
     },
     {
       title: "Agent Commerce",
+      subtitle: "Software can now participate in the economy.",
       icon: <Coins size={20} />,
-      desc: "Micropayments, token escrows, and atomic swaps built directly into the agent runtime. Execute peer-to-peer commerce using Stellar's lightning-fast rails."
+      desc: "Agents can request services, exchange information, purchase resources, and settle payments autonomously.",
+      list: ["Research.", "Negotiate.", "Transact.", "Without human intervention."]
     },
     {
       title: "Playground",
+      subtitle: "Start Building in Minutes.",
       icon: <Laptop size={20} />,
-      desc: "An inline Web IDE to write, compile, and run contracts in seconds. Includes integrated compilers, transaction logging, and Freighter wallet triggers."
+      desc: "Experiment with agents directly in the browser. No setup required.",
+      list: ["Create agents.", "Test workflows.", "Deploy prototypes.", "Explore autonomous systems."],
+      buttonText: "Open Playground",
+      buttonLink: "/playground"
     },
     {
-      title: "CLI Utilities",
-      icon: <CliIcon size={20} />,
-      desc: "Scaffold, test, and deploy agent pipelines directly from your terminal shell. Command the complete development lifecycle with `mycelium deploy`."
-    },
-    {
-      title: "Flexible SDK",
+      title: "SDK Section",
+      subtitle: "Designed for Developers.",
       icon: <Layers size={20} />,
-      desc: "Spin up autonomous agent loops in any Python application. Easy hooks for local transaction signing, ledger tracking, and LLM integrations."
+      desc: "A clean, powerful SDK for building autonomous agents. Everything from Python.",
+      list: ["Create agents.", "Manage wallets.", "Coordinate workflows.", "Deploy on Stellar."],
+      buttonText: "Explore SDK Docs",
+      buttonLink: "https://github.com"
     },
     {
-      title: "Agent Discovery",
-      icon: <Cpu size={20} />,
-      desc: "Peer-to-peer coordination protocols enabling agents to negotiate contract terms, coordinate multi-stage workflows, and transact without intermediaries."
+      title: "CLI Section",
+      subtitle: "Built For The Command Line.",
+      icon: <CliIcon size={20} />,
+      desc: "From project creation to deployment. A complete workflow for autonomous agent development.",
+      list: ["mycelium init", "mycelium create", "mycelium deploy", "mycelium monitor"],
+      isCli: true
     }
   ];
 
@@ -148,7 +160,7 @@ export default function Home() {
       overflowX: "hidden"
     }}>
       {/* Background Interactive Mycelium Network Canvas */}
-      <MyceliumNetwork />
+      {/* <MyceliumNetwork /> */}
 
       {/* Grid Overlay for Premium Depth */}
       <div className="premium-grid" style={{
@@ -281,31 +293,42 @@ export default function Home() {
             </span>
           </div>
 
-          {/* Screenshot-Style Typographic Headline */}
+          {/* Typographic Headline */}
           <h1 style={{
-            fontSize: "clamp(2.2rem, 5.5vw, 4.4rem)",
+            fontSize: "clamp(2.5rem, 6vw, 4.8rem)",
             fontWeight: 800,
-            lineHeight: "1.15",
+            lineHeight: "1.1",
             letterSpacing: "-0.04em",
             color: "#ffffff",
-            marginBottom: "32px",
+            marginBottom: "24px",
             fontFamily: "var(--font-display)"
           }}>
-            Advancing <SporesSVG /> the Economic
-            <br />
-            <span className="font-serif" style={{ fontStyle: "italic", fontWeight: "normal" }}>Networks</span> <ChartSVG />
+            Build Autonomous Agents.
           </h1>
 
           {/* Subheadline */}
+          <h2 style={{
+            fontSize: "clamp(1.1rem, 2.2vw, 1.4rem)",
+            color: "rgba(255, 255, 255, 0.9)",
+            lineHeight: "1.5",
+            maxWidth: "720px",
+            margin: "0 auto 16px auto",
+            fontWeight: 500,
+            fontFamily: "var(--font-sans)"
+          }}>
+            The Python-first framework for creating agents that discover, coordinate, and transact on Stellar.
+          </h2>
+
+          {/* Paragraph */}
           <p style={{
-            fontSize: "clamp(0.95rem, 2vw, 1.15rem)",
-            color: "rgba(255, 255, 255, 0.6)",
+            fontSize: "clamp(0.95rem, 1.8vw, 1.1rem)",
+            color: "rgba(255, 255, 255, 0.65)",
             lineHeight: "1.6",
-            maxWidth: "600px",
-            margin: "0 auto 48px auto",
+            maxWidth: "680px",
+            margin: "0 auto 40px auto",
             fontWeight: 300
           }}>
-            The Python-first framework for creating agents that discover, coordinate, and transact autonomously on Stellar.
+            Create intelligent systems using familiar Python. Deploy on-chain, connect to agent networks, and enable autonomous commerce.
           </p>
 
           {/* Actions */}
@@ -315,7 +338,7 @@ export default function Home() {
             alignItems: "center",
             justifyContent: "center",
             gap: "16px",
-            marginBottom: "80px"
+            marginBottom: "28px"
           }}>
             <Link href="/playground" className="premium-button-primary">
               Launch Playground
@@ -324,6 +347,34 @@ export default function Home() {
             <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="premium-button-secondary">
               Read SDK Docs
             </a>
+          </div>
+
+          {/* Taglines */}
+          <div style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "8px",
+            marginBottom: "80px"
+          }}>
+            <div style={{
+              fontSize: "1.05rem",
+              fontWeight: 600,
+              color: "var(--accent-cyan)",
+              letterSpacing: "0.5px",
+              fontFamily: "var(--font-sans)",
+              textShadow: "0 0 10px rgba(0, 150, 199, 0.2)"
+            }}>
+              Every Agent Needs a Wallet.
+            </div>
+            <div style={{
+              fontSize: "0.85rem",
+              fontFamily: "var(--font-mono)",
+              color: "rgba(255, 255, 255, 0.4)",
+              letterSpacing: "0.5px"
+            }}>
+              No Rust. No smart contract complexity. Just Python.
+            </div>
           </div>
         </div>
 
@@ -363,24 +414,27 @@ export default function Home() {
               display: "block",
               marginBottom: "12px"
             }}>
-              orchestration pipeline
+              AGENT STACK
             </span>
             <h2 className="font-display" style={{
-              fontSize: "clamp(1.8rem, 4vw, 2.3rem)",
-              fontWeight: 700,
-              color: "#ffffff"
+              fontSize: "clamp(2rem, 5vw, 2.8rem)",
+              fontWeight: 800,
+              color: "#ffffff",
+              letterSpacing: "-0.03em"
             }}>
-              Capitalism on Blockchain Rails
+              One agent is useful.
+              <br />
+              <span className="font-serif" style={{ fontStyle: "italic", fontWeight: "normal" }}>A network of agents</span> changes everything.
             </h2>
             <p style={{
-              fontSize: "0.95rem",
-              color: "rgba(255, 255, 255, 0.5)",
-              maxWidth: "500px",
-              margin: "12px auto 0 auto",
+              fontSize: "1.05rem",
+              color: "rgba(255, 255, 255, 0.6)",
+              maxWidth: "600px",
+              margin: "16px auto 0 auto",
               fontWeight: 300,
               lineHeight: "1.6"
             }}>
-              Connect multiple modular, cryptographically secure agent roles to perform complete transactions statelessly.
+              Together they form autonomous economic systems.
             </p>
           </div>
 
@@ -413,14 +467,14 @@ export default function Home() {
               display: "block",
               marginBottom: "12px"
             }}>
-              capabilities
+              FEATURES
             </span>
             <h2 className="font-display" style={{
               fontSize: "clamp(1.8rem, 4vw, 2.3rem)",
               fontWeight: 700,
               color: "#ffffff"
             }}>
-              Built for Autonomous Economies
+              A Complete Toolkit for Autonomous Agents
             </h2>
             <p style={{
               fontSize: "0.95rem",
@@ -430,7 +484,7 @@ export default function Home() {
               fontWeight: 300,
               lineHeight: "1.6"
             }}>
-              High-end framework abstractions giving Python developers power over Stellar's decentralized Ledger.
+              Everything you need to build, test, and deploy smart contract pipelines on the Stellar Soroban network.
             </p>
           </div>
 
@@ -462,13 +516,27 @@ export default function Home() {
                 }}>
                   {feat.icon}
                 </div>
-                <h3 className="font-display" style={{
-                  fontSize: "1.2rem",
-                  fontWeight: 700,
-                  color: "#ffffff"
-                }}>
-                  {feat.title}
-                </h3>
+                <div>
+                  <h3 className="font-display" style={{
+                    fontSize: "1.25rem",
+                    fontWeight: 700,
+                    color: "#ffffff"
+                  }}>
+                    {feat.title}
+                  </h3>
+                  {feat.subtitle && (
+                    <div style={{
+                      fontSize: "0.75rem",
+                      fontFamily: "var(--font-mono)",
+                      color: idx % 2 === 0 ? "var(--accent-cyan)" : "var(--accent-purple)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      marginTop: "4px"
+                    }}>
+                      {feat.subtitle}
+                    </div>
+                  )}
+                </div>
                 <p style={{
                   fontSize: "0.85rem",
                   color: "rgba(255, 255, 255, 0.6)",
@@ -477,38 +545,106 @@ export default function Home() {
                 }}>
                   {feat.desc}
                 </p>
+                {feat.list && (
+                  <ul style={{ listStyle: "none", padding: 0, margin: "8px 0 0 0", display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {feat.list.map((item, lIdx) => (
+                      <li key={lIdx} style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        fontSize: "0.75rem",
+                        color: "rgba(255, 255, 255, 0.5)",
+                        fontFamily: feat.isCli ? "var(--font-mono)" : "var(--font-sans)"
+                      }}>
+                        {feat.isCli ? (
+                          <span style={{ color: "var(--accent-cyan)", fontWeight: "bold" }}>$</span>
+                        ) : (
+                          <span style={{
+                            width: "4px",
+                            height: "4px",
+                            borderRadius: "50%",
+                            backgroundColor: idx % 2 === 0 ? "var(--accent-cyan)" : "var(--accent-purple)"
+                          }} />
+                        )}
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {feat.buttonText && (
+                  <div style={{ marginTop: "auto", paddingTop: "12px" }}>
+                    <Link href={feat.buttonLink} style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      color: idx % 2 === 0 ? "var(--accent-cyan)" : "var(--accent-purple)"
+                    }}>
+                      {feat.buttonText} <ArrowRight size={12} />
+                    </Link>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Pre-launch Bottom Call to Action Section */}
+      {/* Vision Section */}
       <section style={{
         position: "relative",
         zIndex: 10,
-        padding: "120px 24px 140px 24px",
+        padding: "140px 24px 140px 24px",
         textAlign: "center",
-        borderTop: "1px solid rgba(255, 255, 255, 0.06)"
+        borderTop: "1px solid rgba(255, 255, 255, 0.06)",
+        background: "rgba(255, 255, 255, 0.01)"
       }}>
-        <div style={{ maxWidth: "600px", margin: "0 auto" }}>
+        <div style={{ maxWidth: "800px", margin: "0 auto" }}>
+          <span style={{
+            fontSize: "0.75rem",
+            fontFamily: "var(--font-mono)",
+            color: "var(--accent-cyan)",
+            textTransform: "uppercase",
+            letterSpacing: "2px",
+            fontWeight: "bold",
+            display: "block",
+            marginBottom: "20px"
+          }}>
+            VISION STATEMENT
+          </span>
           <h2 className="font-display" style={{
-            fontSize: "clamp(2rem, 5vw, 2.8rem)",
+            fontSize: "clamp(2rem, 5vw, 3.4rem)",
             fontWeight: 800,
-            marginBottom: "20px",
+            lineHeight: "1.2",
+            marginBottom: "32px",
             letterSpacing: "-0.04em",
             color: "#ffffff"
           }}>
-            Deploy Your First Agent.
+            A New Economic Species Is Emerging.
           </h2>
+          <div style={{
+            fontSize: "clamp(1.1rem, 2.5vw, 1.45rem)",
+            color: "rgba(255, 255, 255, 0.85)",
+            lineHeight: "1.7",
+            marginBottom: "40px",
+            fontWeight: 300,
+            fontFamily: "var(--font-serif)",
+            fontStyle: "italic"
+          }}>
+            “For centuries, software executed instructions.
+            <br />
+            Now software can discover, coordinate, and transact.”
+          </div>
           <p style={{
-            fontSize: "1rem",
-            color: "rgba(255, 255, 255, 0.6)",
+            fontSize: "clamp(0.95rem, 2vw, 1.15rem)",
+            color: "rgba(255, 255, 255, 0.55)",
             lineHeight: "1.6",
-            marginBottom: "36px",
+            maxWidth: "600px",
+            margin: "0 auto 48px auto",
             fontWeight: 300
           }}>
-            Write clean Python, compile to Soroban WebAssembly, and coordinate complex transaction logic on Stellar's testnet today.
+            The next economy will not be built solely by humans. It will be built by autonomous agents.
           </p>
           <div style={{
             display: "flex",
@@ -564,7 +700,7 @@ export default function Home() {
                 marginTop: "6px",
                 fontWeight: 300
               }}>
-                The operating system for autonomous economies.
+                Building the Infrastructure for Autonomous Economies.
               </p>
             </div>
             <div style={{
@@ -595,7 +731,7 @@ export default function Home() {
             color: "rgba(255, 255, 255, 0.4)",
             fontWeight: 300
           }}>
-            <span>© {new Date().getFullYear()} Mycelium Labs. All rights reserved.</span>
+            <span>© 2026 Mycelium. All rights reserved.</span>
             <div style={{ display: "flex", gap: "20px" }}>
               <a href="https://stellar.org" target="_blank" rel="noopener noreferrer" style={{ color: "rgba(255, 255, 255, 0.4)", textShadow: "none" }} onMouseEnter={(e) => e.currentTarget.style.color = "#ffffff"} onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255, 255, 255, 0.4)"}>Stellar Network</a>
               <a href="https://github.com" target="_blank" rel="noopener noreferrer" style={{ color: "rgba(255, 255, 255, 0.4)", textShadow: "none" }} onMouseEnter={(e) => e.currentTarget.style.color = "#ffffff"} onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255, 255, 255, 0.4)"}>GitHub</a>

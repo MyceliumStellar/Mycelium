@@ -138,35 +138,35 @@ export default function AgentArchitecture() {
   const agents = [
     {
       title: "Research Agent",
-      role: "Discover & Query",
+      role: "Intelligence",
       icon: <Search size={18} />,
       accent: "var(--accent-cyan)",
-      desc: "Aggregates liquidity feeds, queries on-chain orderbooks, and searches Stellar contracts for coordination endpoints.",
-      steps: ["Scans DEX liquidity pools", "Queries contract registries", "Fetches arbitrage routes"]
+      desc: "Research agents gather intelligence.",
+      steps: ["Scans liquidity pools", "Queries registry entries", "Identifies transaction routes"]
     },
     {
       title: "Execution Agent",
-      role: "Process & Compile",
+      role: "Action",
       icon: <Play size={18} />,
       accent: "#c084fc",
-      desc: "Executes state transitions, processes multi-contract calls statelessly, and compiles Python scripts into sandboxed bytecode.",
-      steps: ["Loads Python agent script", "Compiles Soroban WASM", "Verifies runtime security"]
+      desc: "Execution agents take action.",
+      steps: ["Runs Python agent script", "Compiles Soroban WASM", "Triggers state execution"]
     },
     {
       title: "Treasury Agent",
-      role: "Store & Escrow",
+      role: "Capital",
       icon: <ShieldAlert size={18} />,
       accent: "var(--accent-purple)",
-      desc: "Escrows digital tokens, manages cryptographic multisig setups, and securely holds liquidity reserves under smart control.",
-      steps: ["Enforces multisig policies", "Locks collateral reserves", "Signs Soroban transactions"]
+      desc: "Treasury agents manage capital.",
+      steps: ["Signs multisig rules", "Escrows digital assets", "Secures balance reserves"]
     },
     {
       title: "Commerce Agent",
-      role: "Settle & Transact",
+      role: "Value",
       icon: <ShoppingBag size={18} />,
       accent: "var(--accent-green)",
-      desc: "Coordinates microtransactions with external counterparties, clears Stellar payments, and manages autonomous agent billing.",
-      steps: ["Triggers Stellar payments", "Signs payment channels", "Issues atomic settlements"]
+      desc: "Commerce agents exchange value.",
+      steps: ["Settles micropayments", "Verifies token swaps", "Enforces autonomous billing"]
     }
   ];
 
