@@ -1,5 +1,49 @@
 import ast
 
+
+def _eval_static_constant(node):
+    """Evaluate simple module-level constant expressions safely."""
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ('U64', 'U128', 'U32', 'I128', 'I32', 'Bool', 'Symbol'):
+        if node.args:
+            return _eval_static_constant(node.args[0])
+        return None
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.UnaryOp):
+        value = _eval_static_constant(node.operand)
+        if value is None:
+            return None
+        if isinstance(node.op, ast.USub):
+            return -value
+        if isinstance(node.op, ast.UAdd):
+            return value
+        if isinstance(node.op, ast.Not):
+            return not value
+        return None
+    if isinstance(node, ast.BinOp):
+        left = _eval_static_constant(node.left)
+        right = _eval_static_constant(node.right)
+        if left is None or right is None:
+            return None
+        try:
+            if isinstance(node.op, ast.Add):
+                return left + right
+            if isinstance(node.op, ast.Sub):
+                return left - right
+            if isinstance(node.op, ast.Mult):
+                return left * right
+            if isinstance(node.op, ast.FloorDiv):
+                return left // right
+            if isinstance(node.op, ast.Div):
+                return left // right if isinstance(left, int) and isinstance(right, int) else left / right
+            if isinstance(node.op, ast.Mod):
+                return left % right
+            if isinstance(node.op, ast.Pow):
+                return left ** right
+        except Exception:
+            return None
+    return None
+
 class MyceliumCompilerVisitor(ast.NodeVisitor):
     def __init__(self):
         self.contract_name = None
@@ -20,14 +64,9 @@ class MyceliumCompilerVisitor(ast.NodeVisitor):
             if isinstance(node, ast.Assign) and len(node.targets) == 1:
                 target = node.targets[0]
                 if isinstance(target, ast.Name):
-                    val_node = node.value
-                    if isinstance(val_node, ast.Call) and isinstance(val_node.func, ast.Name) and val_node.func.id in ('U64', 'U128', 'U32', 'I128', 'I32', 'Bool', 'Symbol'):
-                        if val_node.args:
-                            val_node = val_node.args[0]
-                    if isinstance(val_node, ast.Constant):
-                        self.module_constants[target.id] = val_node.value
-                    elif isinstance(val_node, ast.UnaryOp) and isinstance(val_node.op, ast.USub) and isinstance(val_node.operand, ast.Constant):
-                        self.module_constants[target.id] = -val_node.operand.value
+                    value = _eval_static_constant(node.value)
+                    if value is not None:
+                        self.module_constants[target.id] = value
 
         # 1. First Pass: Detect if there is a class decorated with @contract
         contract_class_node = None

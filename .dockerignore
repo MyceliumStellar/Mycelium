@@ -1,0 +1,16 @@
+# Keep the Docker build context small. The compiler image only needs
+# compiler/, mycelium/, and sdk/ sources.
+venv/
+.git/
+node_modules/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+scratch/
+ide/
+cli/
+docs/
+contracts/
+mycelium-contracts/
+*.wasm
+.claude/
