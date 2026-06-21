@@ -1,4 +1,4 @@
-from .core import generate_rust_intermediate, generate_wasm
+from .core import generate_rust_intermediate, generate_wasm, ensure_stellar_cli
 from .inferrer import StorageTypeInferrer
 from .transpiler import RustTranspiler, collect_local_vars
 from .utils import (
@@ -14,6 +14,7 @@ from .utils import (
 __all__ = [
     'generate_rust_intermediate',
     'generate_wasm',
+    'ensure_stellar_cli',
     'StorageTypeInferrer',
     'RustTranspiler',
     'collect_local_vars',
