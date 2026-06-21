@@ -4,7 +4,9 @@ from mycelium_compiler.parser import MyceliumCompilerVisitor
 VALID_PRIMITIVES = {
     "int", "str", "bytes", "bool", "Symbol", "i128", "i32", "i64", "u32", "u64", "Bytes",
     "uint256", "uint128", "uint64", "uint32", "int256", "int128", "int64", "int32",
-    "address", "String", "bool", "bytes32"
+    "address", "String", "bool", "bytes32",
+    "Address", "U128", "U64", "U32", "I128", "I32", "Bool", "Env", "U256",
+    "Map", "Vec", "tuple", "list"
 }
 
 def is_valid_type(t: str, visitor: MyceliumCompilerVisitor = None) -> bool:
@@ -13,6 +15,9 @@ def is_valid_type(t: str, visitor: MyceliumCompilerVisitor = None) -> bool:
         
     t = t.strip()
     
+    if t.endswith(" or None"):
+        return is_valid_type(t[:-8], visitor)
+        
     # 1. Base primitives check
     if t in VALID_PRIMITIVES:
         return True

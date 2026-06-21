@@ -13,11 +13,17 @@ interface AgentCardProps {
   steps: string[];
 }
 
+const cardVariants = {
+  hidden: { opacity: 0, y: 28 },
+  show:   { opacity: 1, y: 0  }
+};
+
 function AgentCard({ title, role, icon, accent, desc, steps }: AgentCardProps) {
   return (
     <motion.div
-      whileHover={{ y: -6, scale: 1.01 }}
-      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      variants={cardVariants}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ y: -6, scale: 1.01, transition: { type: "spring", stiffness: 300, damping: 20 } }}
       className="premium-card"
       style={{
         display: "flex",
@@ -172,25 +178,30 @@ export default function AgentArchitecture() {
 
   return (
     <div style={{ width: "100%", maxWidth: "1200px", margin: "0 auto" }}>
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-        gap: "24px",
-        position: "relative"
-      }}>
+      <motion.div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+          gap: "24px",
+          position: "relative"
+        }}
+        variants={{ hidden: {}, show: { transition: { staggerChildren: 0.12 } } }}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.1 }}
+      >
         {agents.map((agent, index) => (
-          <React.Fragment key={index}>
-            <AgentCard
-              title={agent.title}
-              role={agent.role}
-              icon={agent.icon}
-              accent={agent.accent}
-              desc={agent.desc}
-              steps={agent.steps}
-            />
-          </React.Fragment>
+          <AgentCard
+            key={index}
+            title={agent.title}
+            role={agent.role}
+            icon={agent.icon}
+            accent={agent.accent}
+            desc={agent.desc}
+            steps={agent.steps}
+          />
         ))}
-      </div>
+      </motion.div>
     </div>
   );
 }
