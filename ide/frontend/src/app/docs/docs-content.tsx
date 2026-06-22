@@ -979,60 +979,223 @@ def increment() -> str:
           <>
             <SectionH1>CLI Reference</SectionH1>
             <P>
-              The Mycelium command line tool simplifies project setup, contract compilation, wallet configuration, and deployment on the Stellar network.
+              The Mycelium command line tool (`mycelium`) is the core executable utility of the developer toolchain. It manages project scoping, compiles Python contract scripts to WASM, configures encrypted wallet storage, handles ledger deployments, and queries registry records.
             </P>
 
-            <SectionH2 id="cli-config">mycelium.toml</SectionH2>
+            <SectionH2 id="cli-config">mycelium.toml Manifest Configuration</SectionH2>
             <P>
-              The configuration manifest describes your project credentials and settings:
+              Every Mycelium project requires a manifest file named `mycelium.toml` at its root. The CLI automatically reads parameters from this file to streamline commands, writing back on-chain contract addresses and public keys during deploy actions.
             </P>
             <CodeBlock
               language="toml"
               code={`[project]
-name = "sentinel"
+name    = "my_agent_project"
 version = "0.1.0"
+author  = "Developer Name <dev@example.com>"
 
 [agent]
-framework = "gemini"
-unique_name = "sentinel_agent"
+framework   = "gemini"             # gemini | anthropic | langgraph | custom
+model       = "gemini-2.0-flash"   # Pinned LLM model specifier
+unique_name = "oracle_node_alpha"  # Global unique DNS name in the Hive Registry
 
 [onchain]
-source_contract = "contract.py"
-target_wasm = "build/contract.wasm"
-network = "testnet"`}
+source_contract   = "contract.py"        # Path to Python contract file
+target_wasm       = "build/contract.wasm"# Target compiled WebAssembly file
+network           = "testnet"            # testnet | mainnet
+contract_id       = "CCW3QNEL..."        # Auto-filled by 'mycelium deploy'
+wallet_public_key = "GDA23..."           # Auto-filled by 'mycelium deploy'
+
+[registry]
+hive_registry_address = "CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC"
+service_endpoint      = "https://agent-api.example.com"
+capabilities          = ["price-feed", "usd-xlm"]`}
             />
 
-            <SectionH2 id="cli-commands">CLI Commands List</SectionH2>
-            <div style={{ overflowX: "auto", marginTop: 12, marginBottom: 24 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
-                <thead>
-                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", textAlign: "left" }}>
-                    <th style={{ padding: "10px", color: "rgba(255,255,255,0.5)" }}>Command</th>
-                    <th style={{ padding: "10px", color: "rgba(255,255,255,0.5)" }}>Description</th>
-                    <th style={{ padding: "10px", color: "rgba(255,255,255,0.5)" }}>Flags</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    ["init", "Initialize template project directory", "<name>, --yes"],
-                    ["newwallet", "Generate an encrypted Ed25519 wallet keypair", "--passphrase, --force"],
-                    ["fund", "Obtain Testnet XLM from Friendbot Faucet", "--amount"],
-                    ["check", "Analyze syntax and validate types", "<file>"],
-                    ["compile", "Transpile contract code to Soroban WASM", "--optimize, -o"],
-                    ["deploy", "Deploy the contract wasm to Stellar", "--network"],
-                    ["register", "Register endpoint in Hive directory", "--network"],
-                    ["status", "Print system status and details", ""],
-                    ["doctor", "Analyze system dependencies", ""]
-                  ].map(([cmd, desc, flags]) => (
-                    <tr key={cmd} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                      <td style={{ padding: "10px", fontFamily: "var(--font-mono)", color: "var(--accent-cyan)" }}>mycelium {cmd}</td>
-                      <td style={{ padding: "10px", color: "rgba(255,255,255,0.7)" }}>{desc}</td>
-                      <td style={{ padding: "10px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.4)" }}>{flags || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <P><strong>Manifest Section Details:</strong></P>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>`[project]`:</strong> Metadata containing project naming, versioning constraints, and author specifications.</li>
+              <li><strong>`[agent]`:</strong> Defines the off-chain runtime properties, including the target AI model framework and the unique registry identity string.</li>
+              <li><strong>`[onchain]`:</strong> Manages ledger paths, networks, contract address mappings, and public wallet addresses.</li>
+              <li><strong>`[registry]`:</strong> Specifies the target Hive Registry directory contract address, the agent's external HTTP callback URL, and active service capabilities.</li>
+            </ul>
+
+            <SectionH2 id="cli-commands">CLI Commands Index</SectionH2>
+
+            <SectionH3>mycelium init</SectionH3>
+            <P>Scaffolds a new agent workspace containing standard template files, including a configuration manifest, a baseline Python contract script, and a runner script.</P>
+            <P>Scaffold a workspace prompting for inputs:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium init my_new_agent"
+            />
+            <P>Scaffold instantly using default settings:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium init my_new_agent --yes"
+            />
+            <P><em>Flags:</em> <InlineCode>--yes</InlineCode> (skip interactive setup prompts), <InlineCode>--force</InlineCode> (overwrite existing directories).</P>
+
+            <SectionH3>mycelium newwallet</SectionH3>
+            <P>Generates an encrypted Ed25519 cryptographic keypair file at `.mycelium/wallet.json`. The private key is encrypted using AES-256-GCM with a PBKDF2 key derivation algorithm.</P>
+            <P>Prompt interactively for wallet passphrase:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium newwallet"
+            />
+            <P>Define passphrase via CLI argument:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium newwallet --passphrase &quot;my-secret-passphrase&quot;"
+            />
+            <P><em>Flags:</em> <InlineCode>--passphrase &lt;str&gt;</InlineCode> (passphrase string), <InlineCode>--force</InlineCode> (overwrite existing wallet).</P>
+
+            <SectionH3>mycelium fund</SectionH3>
+            <P>Requests testnet XLM assets from the Stellar network Friendbot faucet to initialize sequence fees and ledger storage reserves for your account.</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium fund"
+            />
+
+            <SectionH3>mycelium check</SectionH3>
+            <P>Parses the Python contract script AST (Abstract Syntax Tree) to check static types, detect syntax anomalies, and confirm compliance with Soroban execution restrictions.</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium check contract.py"
+            />
+
+            <SectionH3>mycelium compile</SectionH3>
+            <P>Translates the Python DSL contract code into Soroban-compatible Rust source structures, then compiles it down to a WebAssembly binary.</P>
+            <P>Compile standard contract WASM:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium compile"
+            />
+            <P>Compile with optimization flags enabled (calls wasm-opt):</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium compile --optimize"
+            />
+            <P><em>Flags:</em> <InlineCode>--optimize</InlineCode> (optimizes WASM file size), <InlineCode>-o &lt;path&gt;</InlineCode> (output WASM destination).</P>
+
+            <SectionH3>mycelium deploy</SectionH3>
+            <P>Uploads the compiled WASM binary to the Stellar ledger, deploys a contract instance, and writes the resulting address to `mycelium.toml`.</P>
+            <P>Deploy using manifest configurations:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium deploy"
+            />
+            <P>Deploy targeting specific network and WASM path:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium deploy --network testnet --wasm build/contract.wasm"
+            />
+            <P><em>Flags:</em> <InlineCode>--network &lt;net&gt;</InlineCode> (testnet/mainnet), <InlineCode>--wasm &lt;path&gt;</InlineCode> (override WASM target).</P>
+
+            <SectionH3>mycelium register</SectionH3>
+            <P>Uploads your agent's cryptographic public key, endpoints, and capabilities tags to the shared global Hive Registry contract.</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium register"
+            />
+
+            <SectionH3>mycelium status</SectionH3>
+            <P>Queries public ledger endpoints to display local wallet balance reserves, sequence heights, and Hive Registry registration status.</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium status"
+            />
+
+            <SectionH3>mycelium call</SectionH3>
+            <P>Invokes an exported smart contract function directly from your terminal, outputting formatted response parameters.</P>
+            <P>Submit state-changing transaction (calls increment):</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium call increment"
+            />
+            <P>Invoke view function (free query, no fees):</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium call get_count --read-only"
+            />
+            <P>Invoke function passing JSON-formatted arguments:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium call reset --args '[100, &quot;GDA2...&quot;]'"
+            />
+            <P><em>Flags:</em> <InlineCode>--read-only</InlineCode> (view function simulation), <InlineCode>--contract &lt;id&gt;</InlineCode> (target contract), <InlineCode>--args &lt;json&gt;</InlineCode> (arguments array).</P>
+
+            <SectionH3>mycelium resolve</SectionH3>
+            <P>Performs a lookup on the Hive Registry to resolve the endpoint URL and public key details associated with an agent's registered name.</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium resolve oracle_node_alpha"
+            />
+
+            <SectionH3>mycelium pay</SectionH3>
+            <P>Dispatches a direct, signed payment of XLM from your wallet balance to a target registry agent name or wallet public key.</P>
+            <P>Pay target agent by unique name:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium pay oracle_node_alpha 10.0"
+            />
+            <P>Pay target address directly:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium pay GDA23... 5.5"
+            />
+
+            <SectionH3>mycelium agents</SectionH3>
+            <P>Scans and outputs a listing of all active registered agents and metadata profiles present on the Hive Registry.</P>
+            <P>List all active agents:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium agents"
+            />
+            <P>Stream new registrations from block height:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium agents --start-ledger 4500000 --no-resolve"
+            />
+
+            <SectionH3>mycelium events</SectionH3>
+            <P>Streams live on-chain contract events matching filtering criteria, highlighting transaction signatures and events topic hashes.</P>
+            <P>Stream all events for contract:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium events --contract CCW3QNEL..."
+            />
+            <P>Stream contract events and follow live transactions:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium events --contract CCW3QNEL... --follow"
+            />
+
+            <SectionH3>mycelium run</SectionH3>
+            <P>Starts the off-chain agent listener runtime execution process, allowing the agent to wait for incoming HTTP tasks and dispatch payments.</P>
+            <P>Run agent listener process:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium run"
+            />
+            <P>Run limiting execution loop iterations:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium run --steps 10"
+            />
+
+            <SectionH3>mycelium test</SectionH3>
+            <P>Runs a dry-run local test validation, simulating all contract methods and transaction loops on a mock environment without consuming network fees.</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium test"
+            />
+
+            <SectionH3>mycelium doctor</SectionH3>
+            <P>Validates local developer environments, ensuring that dependencies (`stellar-cli`, Rust compiler targets, RPC endpoints) are configured correctly.</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium doctor"
+            />
           </>
         );
 
@@ -1041,61 +1204,70 @@ network = "testnet"`}
           <>
             <SectionH1>System Architecture</SectionH1>
             <P>
-              Mycelium features a layered structure mapping developer-friendly environments onto low-level distributed ledgers.
+              Mycelium features a layered structural system designed to bridge off-chain AI model capabilities with on-chain cryptographic safety. This is achieved by dividing operations between deterministic on-chain logic (written in Python DSL and compiled to WASM) and dynamic off-chain agent reasoning loops (built using the Mycelium SDK and standard LLM connectors).
             </P>
 
-            <SectionH2 id="arch-overview">System Overview</SectionH2>
+            <SectionH2 id="arch-overview">Detailed System Topography</SectionH2>
+            <P>
+              The following flowchart represents the boundaries, data exchange paths, and protocols shared between local developer instances, the off-chain agent runner environment, and the Stellar ledger layers:
+            </P>
             <div style={{
-              padding: "20px 24px", borderRadius: 8, marginTop: 12, marginBottom: 24,
+              padding: "24px 28px", borderRadius: 8, marginTop: 16, marginBottom: 24,
               border: "1px solid rgba(255,255,255,0.07)",
               background: "#08080a",
             }}>
               <pre style={{
                 fontFamily: "var(--font-mono)", fontSize: "0.75rem",
                 color: "rgba(255,255,255,0.6)", margin: 0, lineHeight: 1.7,
-              }}>{`┌─────────────────────────────────────────────────────────────┐
-│                     Developer Tooling                       │
-│   CLI (mycelium init/compile/deploy)  ·  Web IDE (Monaco)   │
-└──────────────────────────┬──────────────────────────────────┘
-                           │  Python source
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Compiler Pipeline                         │
-│  parser.py → validator.py → codegen/inferrer.py             │
-│           → codegen/transpiler.py → rustc + wasm32          │
-└──────────────────────────┬──────────────────────────────────┘
-                           │  .wasm binary
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                Agent Runtime (SDK)                           │
-│  AgentContext · HiveClient · EscrowPaymentRouter · x402      │
-│  LangGraph / Gemini / Anthropic adapters                     │
-└──────────────────────────┬──────────────────────────────────┘
-                           │  signed transactions
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  Stellar / Soroban Ledger                    │
-│  Hive Registry Contract  ·  Escrow Contracts  ·  Agent state│
-└─────────────────────────────────────────────────────────────┘`}</pre>
+              }}>{`  [ Developer Workspace ]
+           │  (mycelium check / compile)
+           ▼
+  [ Compiler Pipeline ] ──► (Transpiles to Rust) ──► [ Optimized WASM Binary ]
+                                                               │
+                                                       (deploy to ledger)
+                                                               ▼
+  [ Off-Chain SDK Runtime ] <───── (JSON-RPC Protocol) ─────► [ Soroban RPC Node ]
+   - AgentContext Signer                                       │
+   - Hive Registry Client                                      │
+   - Escrow Payment Router                             (commits state changes)
+   - Agent Loop (LLM Tools)                                    ▼
+           │                                        [ Stellar Soroban Ledger ]
+    (A2A HTTP Call)                                  - Hive Registry Contract
+           ▼                                         - Active Escrow Accounts
+  [ Peer Agent Endpoint ]                            - Instance Storage Keys`}</pre>
             </div>
 
-            <SectionH2 id="arch-compiler">Compiler Pipeline</SectionH2>
+            <SectionH2 id="arch-compiler">Compiler Transpilation Pipeline</SectionH2>
             <P>
-              The Mycelium transpiler converts Python contracts to WASM using a multi-phase system:
+              The Mycelium transpiler converts Python contract sources to WebAssembly through a strict four-stage pipeline designed to guarantee safety, type alignment, and performance:
             </P>
-            <ol style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
-              <li><strong>Parser (`parser.py`):</strong> Inspects the Python Abstract Syntax Tree (AST), identifying variables, view declarations, and contract interfaces.</li>
-              <li><strong>Validator (`validator.py`):</strong> Rejects unsafe Python features (like `import`, `eval`, or dynamic size arrays) that break blockchain determinism.</li>
-              <li><strong>Inferrer (`codegen/inferrer.py`):</strong> Maps Python types onto Stellar-SDK equivalent sizes (e.g. `uint256` to `U256`).</li>
-              <li><strong>Transpiler (`codegen/transpiler.py`):</strong> Translates operations to Rust code, invokes the rustc compiler, and generates optimized WASM files using `stellar-cli`.</li>
-            </ol>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 16, marginBottom: 24 }}>
+              {[
+                { stage: "Stage 1 — Parsing & Lexing (parser.py)", desc: "Reads standard Python files, parses the AST structure, and validates variables annotated as contract state along with external methods marked by @external and @view decorators." },
+                { stage: "Stage 2 — AST Safety Validation (validator.py)", desc: "Filters code to ensure determinism. It rejects dynamic statements (like eval(), exec()), imports of unpinned libraries, loop lengths that cannot be verified statically, and unbounded storage allocations." },
+                { stage: "Stage 3 — Type Inference Mapping (codegen/inferrer.py)", desc: "Maps standard Python types to exact-width Rust equivalents targeting the soroban-sdk crate. For example: 'uint256' maps to 'U256', 'Mapping[K, V]' maps to 'Map<K, V>', and 'address' maps to 'Address'." },
+                { stage: "Stage 4 — Transpilation & WASM Packaging (codegen/transpiler.py)", desc: "Generates Rust source files matching the inferred type bindings. It then calls 'stellar-cli' and 'rustc' targets to produce optimized WASM binaries ready for network deployment." }
+              ].map((s, idx) => (
+                <div key={idx} style={{
+                  padding: "16px", borderRadius: 8,
+                  border: "1px solid rgba(255,255,255,0.06)",
+                  background: "rgba(255,255,255,0.01)"
+                }}>
+                  <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--accent-cyan)", marginBottom: 4 }}>{s.stage}</div>
+                  <div style={{ fontSize: "0.83rem", color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>{s.desc}</div>
+                </div>
+              ))}
+            </div>
 
             <SectionH2 id="arch-benchmark">Compiler Benchmark Specs</SectionH2>
             <P>
-              Mycelium is tested against 300 smart contract fixtures. Out of these, <strong>132 compiled contracts</strong> pass integration checks, covering multi-signature structures, automated marketplaces, or dynamic escrows. All templates are loadable from the IDE Playground.
+              To maintain system accuracy, Mycelium validates compilation against 300 test fixtures. These cover 100 core contracts (storage tests, basic math, type boundaries) and 200 advanced contracts (escrow rules, registry details, multi-signature conditions). Currently, 132 out of the 300 templates compile cleanly and are fully available for testing in the Playground.
             </P>
 
             <SectionH2 id="arch-toolchain">Pinned Toolchain Specs</SectionH2>
+            <P>
+              To ensure compilation consistency across various platforms, Mycelium locks all compiler actions to specific dependency versions:
+            </P>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginTop: 12 }}>
               {[
                 { label: "stellar-cli", value: "27.0.0" },
