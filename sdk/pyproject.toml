@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "mycelium-sdk"
 version = "0.1.0"
 description = "Mycelium on-chain agent SDK (signing, contract calls, hive discovery, x402)"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "stellar-sdk>=14,<15",
