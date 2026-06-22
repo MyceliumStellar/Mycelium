@@ -463,11 +463,11 @@ export default function AgentNetworkPage() {
             <Link href="/agent"
               style={{ fontSize: "0.78rem", color: "#ffffff", fontWeight: 500 }}
             >agents</Link>
-            <a href="https://github.com" target="_blank" rel="noopener noreferrer"
+            <Link href="/docs"
               style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", display: "flex", alignItems: "center", gap: "4px" }}
               onMouseEnter={e => e.currentTarget.style.color = "#fff"}
               onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.45)"}
-            >docs <ExternalLink size={11} /></a>
+            >docs</Link>
           </nav>
 
           <Link href="/playground" className="premium-button-primary" style={{

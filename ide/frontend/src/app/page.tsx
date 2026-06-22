@@ -102,11 +102,11 @@ export default function Home() {
               onMouseEnter={e => e.currentTarget.style.color = "#fff"}
               onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.45)"}
             >agents</Link>
-            <a href="https://github.com" target="_blank" rel="noopener noreferrer"
+            <Link href="/docs"
               style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", display: "flex", alignItems: "center", gap: "4px" }}
               onMouseEnter={e => e.currentTarget.style.color = "#fff"}
               onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.45)"}
-            >docs <ExternalLink size={11} /></a>
+            >docs</Link>
           </nav>
           <style jsx>{`
             @media (min-width: 768px) {

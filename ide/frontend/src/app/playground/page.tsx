@@ -1568,9 +1568,9 @@ export default function Playground() {
       flexDirection: "column",
       width: "100vw",
       height: "100vh",
-      background: "#000000",
+      background: "var(--background)",
       color: "var(--foreground)",
-      fontFamily: "var(--font-retro)",
+      fontFamily: "var(--font-sans)",
       overflow: "hidden",
       position: "relative"
     }}>
@@ -1799,6 +1799,22 @@ export default function Playground() {
               >
                 AGENTS NETWORK
               </Link>
+              
+              {/* Docs Link Badge */}
+              <Link href="/docs" style={{
+                fontSize: "0.8rem",
+                fontFamily: "var(--font-mono)",
+                background: "#0c0c0e",
+                border: "1px solid var(--border-color)",
+                padding: "2px 8px",
+                color: "var(--accent-cyan)",
+                transition: "all 0.2s"
+              }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = "var(--accent-cyan)"}
+              onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border-color)"}
+              >
+                DOCUMENTATION
+              </Link>
             </div>
 
             {/* Wallet & User Actions */}
@@ -1912,7 +1928,7 @@ export default function Playground() {
                     border: "1px solid var(--border-color)",
                     color: "var(--foreground)",
                     padding: "6px",
-                    fontFamily: "var(--font-retro)",
+                    fontFamily: "var(--font-sans)",
                     fontSize: "1rem",
                     outline: "none"
                   }}
@@ -2438,7 +2454,7 @@ class MyceliumHiveRegistry:
                           borderTopColor: activeTab === tab.id ? theme.accent : "transparent",
                           color: activeTab === tab.id ? theme.accent : "var(--text-muted)",
                           padding: "6px 14px",
-                          fontFamily: "var(--font-retro)",
+                          fontFamily: "var(--font-sans)",
                           fontSize: "0.85rem",
                           cursor: "pointer",
                           display: "flex",
@@ -3015,7 +3031,7 @@ class MyceliumHiveRegistry:
                 border: "1px solid var(--border-color)",
                 color: "var(--accent-green)",
                 padding: "8px",
-                fontFamily: "var(--font-retro)",
+                fontFamily: "var(--font-sans)",
                 fontSize: "1.1rem",
                 outline: "none",
                 marginBottom: "20px"
@@ -3076,7 +3092,7 @@ class MyceliumHiveRegistry:
                 border: "1px solid var(--border-color)",
                 color: "var(--accent-green)",
                 padding: "8px",
-                fontFamily: "var(--font-retro)",
+                fontFamily: "var(--font-sans)",
                 fontSize: "1.1rem",
                 outline: "none",
                 marginBottom: "20px"
