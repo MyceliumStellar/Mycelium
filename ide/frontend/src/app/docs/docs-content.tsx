@@ -222,7 +222,8 @@ export default function DocsContent({ slug: rawSlug }: { slug: string }) {
     "introduction": [
       { id: "overview", label: "Overview" },
       { id: "core-features", label: "Core Features" },
-      { id: "why-mycelium", label: "Why Mycelium" }
+      { id: "why-mycelium", label: "Why Mycelium" },
+      { id: "platform-components", label: "Platform Subsystems" }
     ],
     "quick-start": [
       { id: "step-1", label: "1 — Install Toolchain" },
@@ -250,11 +251,14 @@ export default function DocsContent({ slug: rawSlug }: { slug: string }) {
     "commerce": [
       { id: "commerce-overview", label: "Overview" },
       { id: "commerce-escrow", label: "Escrow Router" },
+      { id: "commerce-contract", label: "Escrow Contract API" },
+      { id: "commerce-legacy", label: "Legacy API Support" },
       { id: "commerce-flow", label: "Settlement Flow" },
       { id: "commerce-usecases", label: "Use Cases" }
     ],
     "registry": [
-      { id: "registry-contract", label: "Contract Details" },
+      { id: "registry-details", label: "Contract Directory" },
+      { id: "registry-contract-api", label: "Registry Contract API" },
       { id: "registry-api", label: "HiveClient API" },
       { id: "registry-events", label: "Events Stream" }
     ],
@@ -273,6 +277,8 @@ export default function DocsContent({ slug: rawSlug }: { slug: string }) {
     ],
     "architecture": [
       { id: "arch-overview", label: "System Overview" },
+      { id: "arch-sandbox", label: "Sandbox Compiler Environment" },
+      { id: "arch-ide", label: "IDE Architecture" },
       { id: "arch-compiler", label: "Compiler Pipeline" },
       { id: "arch-benchmark", label: "Benchmark Specs" },
       { id: "arch-toolchain", label: "Pinned Toolchain" }
@@ -363,6 +369,18 @@ export default function DocsContent({ slug: rawSlug }: { slug: string }) {
               <li><strong>Zero Intermediaries:</strong> Agents directly contract other agents, verify outputs cryptographically, and pay using Stellar micro-escrows.</li>
               <li><strong>Native Python Support:</strong> No context switching to Rust. Write contract state and logic using simple Python types.</li>
               <li><strong>Built for Scale:</strong> Soroban’s state archival system and fast execution fees make micro-transactions viable down to fractions of a cent.</li>
+            </ul>
+
+            <SectionH2 id="platform-components">Platform Subsystems</SectionH2>
+            <P>
+              The Mycelium codebase is organized into several key modular developer components:
+            </P>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>Web IDE (ide/):</strong> A full-featured web-based interface (React/Next.js frontend and FastAPI backend) that integrates with GitHub OAuth for Git-backed workspace management and compiles contracts inside secure, resource-limited Docker containers.</li>
+              <li><strong>Compiler (compiler/):</strong> A custom AST-to-WASM transpiler written in Python. It parses contract source code, verifies semantic AST rules, infers types dynamically, generates Soroban-compatible Rust source structures, and compiles them.</li>
+              <li><strong>CLI (cli/):</strong> The Command Line Interface developer suite that wraps compiling, deployment, testing, and registration operations in a single terminal framework.</li>
+              <li><strong>SDK (sdk/):</strong> The Python SDK which provides the core agent loops, wallet encryption (AES-256-GCM + PBKDF2), on-chain transaction signing, RPC client connections, and AI adapters (Anthropic, Gemini, LangGraph).</li>
+              <li><strong>Core Smart Contracts:</strong> On-chain contracts authored in the Mycelium DSL, including the global <em>HiveRegistry</em> directory and the <em>x402 Escrow</em> payment router.</li>
             </ul>
           </>
         );
@@ -750,7 +768,7 @@ capabilities          = ["counter", "demo"]`}
 
             <SectionH2 id="commerce-escrow">EscrowPaymentRouter</SectionH2>
             <P>
-              The `EscrowPaymentRouter` class is the SDK module that simplifies creating, unlocking, and claiming escrows.
+              The `EscrowPaymentRouter` class is the SDK module that simplifies creating, unlocking, and claiming escrows. It handles loading and deploying the compiled WASM binary `escrow.wasm` on demand and initializing it.
             </P>
             <CodeBlock
               language="python"
@@ -773,6 +791,49 @@ escrow_id = router.create_locked_escrow(
     task_hash=task_spec_hash,
 )
 print(f"Escrow successfully locked: {escrow_id}")`}
+            />
+
+            <SectionH2 id="commerce-contract">Escrow Contract API</SectionH2>
+            <P>
+              The underlying smart contract deployed by the `EscrowPaymentRouter` is compiled from `escrow_contract.py`. It exports the following external and view methods:
+            </P>
+            <APISignature
+              sig="initialize(depositor: Address, provider: Address, token: Address, amount: I128, task_hash: Bytes, timeout: U64) → Bool"
+              description="Locks 'amount' of 'token' from 'depositor', payable to 'provider' once a proof of 'task_hash' is published. 'timeout' seconds after creation the depositor may refund instead. Reverts if already initialized."
+            />
+            <APISignature
+              sig="claim_funds(proof: Bytes) → Bool"
+              description="Releases the locked funds to the provider. The SHA-256 hash of 'proof' must match the agreed 'task_hash'. Reverts if uninitialized, already settled, or the proof is invalid."
+            />
+            <APISignature
+              sig="refund() → Bool"
+              description="Returns the locked funds to the depositor after the deadline timeout. Reverts if uninitialized, already settled, or the deadline has not yet passed. Requires signature from the depositor."
+            />
+            <APISignature
+              sig="get_details() → Map"
+              description="Returns the escrow's current state for off-chain inspection (provider address, amount, deadline timestamp, and settled boolean)."
+              returns="Map containing { provider: Address, amount: I128, deadline: U64, settled: Bool }"
+            />
+            <P><strong>Contract Error Codes:</strong></P>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><InlineCode>ALREADY_INITIALIZED = 1</InlineCode> — The escrow contract has already been set up.</li>
+              <li><InlineCode>NOT_INITIALIZED = 2</InlineCode> — Action attempted on an uninitialized escrow contract.</li>
+              <li><InlineCode>ALREADY_SETTLED = 3</InlineCode> — Action attempted on an escrow contract that has already released or refunded.</li>
+              <li><InlineCode>INVALID_PROOF = 4</InlineCode> — The provided verification proof SHA-256 hash does not match the configured task hash.</li>
+              <li><InlineCode>NOT_EXPIRED = 5</InlineCode> — Attempted a depositor refund before the lock deadline has expired.</li>
+            </ul>
+
+            <SectionH2 id="commerce-legacy">Legacy API Support</SectionH2>
+            <P>
+              For backwards compatibility with older agent code, the SDK exposes the legacy `EscrowPaymentManager` wrapper (an alias of `EscrowPaymentRouter`) which uses task strings directly:
+            </P>
+            <APISignature
+              sig="create_escrow_payment(recipient_id: str, amount_xlm: float, task_id: str) → str"
+              description="Helper that automatically computes the SHA-256 hash of task_id and calls create_locked_escrow."
+            />
+            <APISignature
+              sig="disburse_payment(escrow_id: str, signature_proof: str | bytes) → bool"
+              description="Claims the locked funds on the escrow by passing the signature proof."
             />
 
             <SectionH2 id="commerce-flow">Settlement Flow Diagram</SectionH2>
@@ -827,7 +888,7 @@ print(f"Escrow successfully locked: {escrow_id}")`}
               The Hive Registry functions as the secure global directory registry for Mycelium agents. It provides a trustless directory service directly on-chain using Soroban storage.
             </P>
 
-            <SectionH2 id="registry-contract">Contract Details</SectionH2>
+            <SectionH2 id="registry-details">Contract Directory</SectionH2>
             <P>
               The registry maps hashes of unique names to the agent profiles, storing:
             </P>
@@ -836,6 +897,33 @@ print(f"Escrow successfully locked: {escrow_id}")`}
               <li><strong>Capabilities Hash:</strong> SHA-256 hash summarizing supported methods and protocols.</li>
               <li><strong>Service Endpoint:</strong> The HTTP endpoint where the agent listens for incoming tasks.</li>
               <li><strong>Reputation Score:</strong> A uint64 indicating successfully completed escrow contracts.</li>
+            </ul>
+
+            <SectionH2 id="registry-contract-api">Registry Contract API</SectionH2>
+            <P>
+              The Hive Registry is written in the Mycelium DSL and compiled to WASM. It exposes the following smart contract methods:
+            </P>
+            <APISignature
+              sig="register_agent(name: Symbol, agent_address: Address, capability_hash: Bytes, endpoint: Bytes, model: Bytes, role: Bytes, desc: Bytes) → Bool"
+              description="Registers a unique name to the caller's key. Reverts if already claimed. The caller must verify auth."
+            />
+            <APISignature
+              sig="resolve_agent(name: Symbol) → Map"
+              description="Resolves a unique symbol to its on-chain agent metadata profile. View function."
+              returns="Map containing { address: Address, capability: Bytes, endpoint: Bytes, model: Bytes, role: Bytes, desc: Bytes, reputation: U64 }"
+            />
+            <APISignature
+              sig="update_reputation(name: Symbol, new_reputation: U64) → Bool"
+              description="Updates an agent's reputation score on-chain. Reverts if not registered."
+            />
+            <APISignature
+              sig="is_registered(name: Symbol) → Bool"
+              description="Helper view function checking if a name is currently registered."
+            />
+            <P><strong>Contract Error Codes:</strong></P>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><InlineCode>NAME_TAKEN = 1</InlineCode> — The requested name symbol has already been claimed by another public address.</li>
+              <li><InlineCode>NOT_REGISTERED = 2</InlineCode> — The requested name symbol has not been registered.</li>
             </ul>
 
             <SectionH2 id="registry-api">HiveClient API Reference</SectionH2>
@@ -851,7 +939,7 @@ print(f"Escrow successfully locked: {escrow_id}")`}
             <APISignature
               sig="hive.resolve_agent(unique_name) → dict"
               description="Reads the registry directory lookup on-chain. This is a read-only simulation call and is completely free."
-              returns="dict containing { public_key, endpoint, capabilities, reputation, model }"
+              returns="dict containing { public_key, endpoint, capabilities, reputation, model, role, desc }"
             />
             <APISignature
               sig="hive.discover_agents(start_ledger=None, resolve=True) → list[dict]"
@@ -883,11 +971,28 @@ for agent in agents:
 
             <SectionH2 id="sdk-context">AgentContext</SectionH2>
             <P>
-              The central class coordinating connections to Soroban RPC endpoints, tracking account sequence numbers, and signing transactions.
+              The central class coordinating connections to Soroban RPC endpoints, tracking account sequence numbers, and signing transactions. It can be constructed in multiple ways:
             </P>
             <APISignature
               sig={`AgentContext(\n  keypair_path: str = ".mycelium/wallet.json",\n  network_type: str = "testnet",\n  passphrase: str = None,\n  dry_run: bool = False\n)`}
-              description="Creates a local signing context. If dry_run is true, transactions are simulated and logged but never submitted to the ledger."
+              description="Creates a local signing context. If dry_run is true, state-changing calls are simulated and logged but never submitted to the ledger."
+            />
+            <APISignature
+              sig="AgentContext.read_only(network_type: str = 'testnet') → AgentContext"
+              description="Builds a wallet-free context using a temporary random keypair as the simulation source account. Perfect for read-only view function calls."
+            />
+            <APISignature
+              sig="AgentContext.from_keypair(keypair_path: str, network: StellarNetwork | str) → AgentContext"
+              description="Legacy back-compatibility constructor utilizing the StellarNetwork enum (TESTNET, MAINNET, LOCAL)."
+            />
+            <APISignature
+              sig="ctx.call_contract(contract_id: str, function_name: str, args: list, read_only: bool = False) → Any | TxResult"
+              description="Invokes a Soroban contract. If read_only=True, it performs a ledger simulation returning the decoded Python value. If read_only=False, it simulates, prepares resource fees/footprints, signs, submits, and polls until settled, returning a TxResult."
+              returns="decoded value if read_only else TxResult(hash: str, status: str, return_value: Any)"
+            />
+            <APISignature
+              sig="ctx.acall_contract(contract_id: str, function_name: str, args: list, read_only: bool = False) → Awaitable[Any | TxResult]"
+              description="Asynchronous wrapper around call_contract running the blocking sync logic in a background worker thread via asyncio.to_thread."
             />
 
             <SectionH2 id="sdk-client">Typed Contract Client</SectionH2>
@@ -902,7 +1007,11 @@ for agent in agents:
 tx = client.increment()
 
 # Read-only method
-count = client.read.get_count()`}
+count = client.read.get_count()
+
+# Async calls
+tx_async = await client.aio.increment()
+count_async = await client.aio.read.get_count()`}
             />
 
             <SectionH2 id="sdk-hive">HiveClient</SectionH2>
@@ -910,20 +1019,52 @@ count = client.read.get_count()`}
               Used for interacting with the global Hive registry. Resolve agents, check reputation metadata, or update registration records.
             </P>
             <APISignature
-              sig="hive.resolve_agent(name: str) → dict"
-              description="Queries the registry on-chain metadata for the specified agent name."
+              sig="HiveClient(context: AgentContext, registry_address: str = None)"
+              description="Constructs a registry client. The registry_address parameter is optional and defaults to the HIVEMIND_REGISTRY_ADDRESS constant."
+            />
+            <APISignature
+              sig="hive.register(unique_name: str, capability_tags: list[str], endpoint: str, model: str = '', role: str = '', desc: str = '') → TxResult"
+              description="Encrypts/packs capability tags into a SHA-256 hash and registers agent endpoints, model, role, and description on-chain. Returns the TxResult."
+            />
+            <APISignature
+              sig="hive.resolve_agent(unique_name: str) → dict"
+              description="Queries the registry on-chain metadata map. Returns resolved public_key, capability_hash, endpoint string, model, role, desc, and reputation."
+              returns="dict containing { public_key, capability_hash, endpoint, model, role, desc, reputation }"
+            />
+            <APISignature
+              sig="hive.discover_agents(start_ledger: int = None, resolve: bool = True) → list[dict]"
+              description="Queries the historic registry registration events starting from start_ledger using RPC event filter loops (window size: 16,000, page limit: 100, max windows: 64) and builds an active list."
             />
 
             <SectionH2 id="sdk-escrow-ref">EscrowPaymentRouter</SectionH2>
+            <P>
+              Create and manage escrow payment channels with conditional settlement releases. Deploys the escrow.wasm binary under the hood:
+            </P>
             <APISignature
-              sig="router.create_locked_escrow(provider_id: str, amount_xlm: Decimal, task_hash: bytes) → str"
-              description="Creates a payment channel and locks the specified funds. Returns the new escrow contract ID."
+              sig="EscrowPaymentRouter(context: AgentContext)"
+              description="Constructs the escrow router utilizing the provided signing context."
+            />
+            <APISignature
+              sig="router.create_locked_escrow(provider_id: str, amount_xlm: Decimal, task_hash: bytes, token: str = None, timeout_seconds: int = 86400) → str"
+              description="Deploys an escrow contract instance on-chain and locks amount_xlm of token (defaults to native XLM SAC CDLZFC3...) for provider_id. Returns the contract ID of the escrow."
+            />
+            <APISignature
+              sig="router.release_funds(escrow_contract_id: str, verification_proof: bytes) → TxResult"
+              description="Disburses the locked funds by invoking claim_funds with the preimage verification proof. Returns TxResult."
+            />
+            <APISignature
+              sig="router.refund(escrow_contract_id: str) → TxResult"
+              description="Reclaims depositor funds on an expired escrow after its deadline timeout has passed. Returns TxResult."
             />
 
             <SectionH2 id="sdk-loop">Agent Loop</SectionH2>
             <P>
               Automate LLM agent loops using `run_agent_loop`, mapping Soroban methods directly to AI tool choices:
             </P>
+            <APISignature
+              sig="run_agent_loop(goal: str, *, context: AgentContext, provider: str = 'anthropic', model: str = None, api_key: str = None, contract_id: str = None, tools: list = None, hive: HiveClient = None, system: str = None, max_steps: int = 8, max_tokens: int = 16000) → str"
+              description="Runs a multi-turn reasoning agent loop (Gemini uses automatic function calling, Anthropic uses manual Claude tool use loops) mapped to contract tools. Returns the final text response from the model."
+            />
             <CodeBlock
               language="python"
               code={`from mycelium import run_agent_loop, ContractTool
@@ -947,29 +1088,38 @@ result = run_agent_loop(
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12, marginBottom: 24 }}>
               <div style={{ padding: "14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.01)" }}>
                 <SectionH3>Google Gemini</SectionH3>
+                <P>Uses plain Python callables with docstrings and type hints. Auto-routing is enabled by default:</P>
                 <CodeBlock
                   language="python"
-                  code={`model = genai.GenerativeModel(
+                  code={`from mycelium_sdk.adapters.gemini import make_contract_function
+
+tool_fn = make_contract_function(
+    ctx, "increment", "CCW..."
+)
+model = genai.GenerativeModel(
     "gemini-2.0-flash", 
-    tools=[lookup_agent]
+    tools=[tool_fn]
 )`}
                 />
               </div>
               <div style={{ padding: "14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.01)" }}>
                 <SectionH3>LangGraph</SectionH3>
+                <P>Exposes contract functions as standard LangChain <InlineCode>@tool</InlineCode> definitions:</P>
                 <CodeBlock
                   language="python"
-                  code={`@tool
-def increment() -> str:
-    ctx.call_contract(cid, "increment")
-    return "Done"`}
+                  code={`from mycelium_sdk.adapters.langgraph import make_contract_tool
+
+lg_tool = make_contract_tool(
+    ctx, "increment", "CCW..."
+)
+# Add directly to a LangGraph node`}
                 />
               </div>
             </div>
 
             <SectionH2 id="sdk-encryption">Wallet Encryption</SectionH2>
             <P>
-              Wallet keys are encrypted on disk using PBKDF2-HMAC-SHA256 (600,000 rounds) and AES-256-GCM. Private keys are loaded into system memory only when signing a transaction.
+              Wallet keys are encrypted on disk using PBKDF2-HMAC-SHA256 (600,000 rounds, 16-byte random salt) and AES-256-GCM (12-byte random nonce / IV). Filesystem permissions are set to <InlineCode>0600</InlineCode>. Private keys are loaded into volatile system memory only during signing and are cleared immediately after execution.
             </P>
           </>
         );
@@ -1022,7 +1172,7 @@ capabilities          = ["price-feed", "usd-xlm"]`}
             <SectionH2 id="cli-commands">CLI Commands Index</SectionH2>
 
             <SectionH3>mycelium init</SectionH3>
-            <P>Scaffolds a new agent workspace containing standard template files, including a configuration manifest, a baseline Python contract script, and a runner script.</P>
+            <P>Scaffolds a new agent workspace containing standard template files, including a configuration manifest, a baseline Python contract script, and a runner script. Unless skipped, it launches an interactive wizard prompting for framework selection and model choices.</P>
             <P>Scaffold a workspace prompting for inputs:</P>
             <CodeBlock
               language="bash"
@@ -1033,10 +1183,10 @@ capabilities          = ["price-feed", "usd-xlm"]`}
               language="bash"
               code="mycelium init my_new_agent --yes"
             />
-            <P><em>Flags:</em> <InlineCode>--yes</InlineCode> (skip interactive setup prompts), <InlineCode>--force</InlineCode> (overwrite existing directories).</P>
+            <P><em>Flags:</em> <InlineCode>--yes</InlineCode> / <InlineCode>--non-interactive</InlineCode> (skip interactive setup prompts), <InlineCode>--force</InlineCode> (overwrite existing directories).</P>
 
             <SectionH3>mycelium newwallet</SectionH3>
-            <P>Generates an encrypted Ed25519 cryptographic keypair file at `.mycelium/wallet.json`. The private key is encrypted using AES-256-GCM with a PBKDF2 key derivation algorithm.</P>
+            <P>Generates an encrypted Ed25519 cryptographic keypair file at `.mycelium/wallet.json`. The private key is encrypted using AES-256-GCM with a PBKDF2 key derivation algorithm (600,000 iterations, 16-byte random salt). Filesystem permissions are locked down to `0600`.</P>
             <P>Prompt interactively for wallet passphrase:</P>
             <CodeBlock
               language="bash"
@@ -1055,6 +1205,7 @@ capabilities          = ["price-feed", "usd-xlm"]`}
               language="bash"
               code="mycelium fund"
             />
+            <P><em>Flags:</em> <InlineCode>--address &lt;str&gt;</InlineCode> (fund override address), <InlineCode>--network &lt;net&gt;</InlineCode> (target network), <InlineCode>--wallet &lt;path&gt;</InlineCode> (wallet path).</P>
 
             <SectionH3>mycelium check</SectionH3>
             <P>Parses the Python contract script AST (Abstract Syntax Tree) to check static types, detect syntax anomalies, and confirm compliance with Soroban execution restrictions.</P>
@@ -1064,21 +1215,21 @@ capabilities          = ["price-feed", "usd-xlm"]`}
             />
 
             <SectionH3>mycelium compile</SectionH3>
-            <P>Translates the Python DSL contract code into Soroban-compatible Rust source structures, then compiles it down to a WebAssembly binary.</P>
+            <P>Translates the Python DSL contract code into Soroban-compatible Rust source structures, then compiles it down to a WebAssembly binary. When optimized, it triggers `wasm-opt` to reduce size.</P>
             <P>Compile standard contract WASM:</P>
             <CodeBlock
               language="bash"
               code="mycelium compile"
             />
-            <P>Compile with optimization flags enabled (calls wasm-opt):</P>
+            <P>Compile with optimization flags enabled:</P>
             <CodeBlock
               language="bash"
               code="mycelium compile --optimize"
             />
-            <P><em>Flags:</em> <InlineCode>--optimize</InlineCode> (optimizes WASM file size), <InlineCode>-o &lt;path&gt;</InlineCode> (output WASM destination).</P>
+            <P><em>Flags:</em> <InlineCode>--optimize</InlineCode> (optimizes WASM file size), <InlineCode>-o &lt;path&gt;</InlineCode> / <InlineCode>--output &lt;path&gt;</InlineCode> (output WASM destination).</P>
 
             <SectionH3>mycelium deploy</SectionH3>
-            <P>Uploads the compiled WASM binary to the Stellar ledger, deploys a contract instance, and writes the resulting address to `mycelium.toml`.</P>
+            <P>Uploads the compiled WASM binary to the Stellar ledger, deploys a contract instance, and writes the resulting address and public keys back to `mycelium.toml`. On testnet, it auto-funds empty wallets; on mainnet, it asserts a minimum balance of `5.0 XLM` before submitting.</P>
             <P>Deploy using manifest configurations:</P>
             <CodeBlock
               language="bash"
@@ -1089,28 +1240,38 @@ capabilities          = ["price-feed", "usd-xlm"]`}
               language="bash"
               code="mycelium deploy --network testnet --wasm build/contract.wasm"
             />
-            <P><em>Flags:</em> <InlineCode>--network &lt;net&gt;</InlineCode> (testnet/mainnet), <InlineCode>--wasm &lt;path&gt;</InlineCode> (override WASM target).</P>
+            <P><em>Flags:</em> <InlineCode>--network &lt;net&gt;</InlineCode> (testnet/mainnet), <InlineCode>--wasm &lt;path&gt;</InlineCode> (override WASM target), <InlineCode>--wallet &lt;path&gt;</InlineCode> (signing wallet path).</P>
 
             <SectionH3>mycelium register</SectionH3>
-            <P>Uploads your agent's cryptographic public key, endpoints, and capabilities tags to the shared global Hive Registry contract.</P>
+            <P>Uploads your agent's cryptographic public key, endpoints, and capabilities tags (SHA-256 hashed) to the shared global Hive Registry contract.</P>
             <CodeBlock
               language="bash"
               code="mycelium register"
             />
+            <P><em>Flags:</em> <InlineCode>--network &lt;net&gt;</InlineCode> (override network), <InlineCode>--wallet &lt;path&gt;</InlineCode> (override wallet path).</P>
+
+            <SectionH3>mycelium agent</SectionH3>
+            <P>Loads a specific agent runtime script (e.g. `agent.py`) as a module and runs it, binding the on-chain contract ID into the environment as `MYCELIUM_CONTRACT_ID`. It also loads variables from any sibling `.env` file.</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium agent agent.py --contract CCW3QNEL..."
+            />
+            <P><em>Flags:</em> <InlineCode>--contract &lt;id&gt;</InlineCode> (the on-chain contract ID to bind into environment variables).</P>
 
             <SectionH3>mycelium status</SectionH3>
-            <P>Queries public ledger endpoints to display local wallet balance reserves, sequence heights, and Hive Registry registration status.</P>
+            <P>Queries public ledger endpoints to display local wallet balance reserves, network passphrase, sequence heights, contract deployment state, and Hive Registry registration details in one dashboard.</P>
             <CodeBlock
               language="bash"
               code="mycelium status"
             />
+            <P><em>Flags:</em> <InlineCode>--network &lt;net&gt;</InlineCode> (target network), <InlineCode>--wallet &lt;path&gt;</InlineCode> (wallet path).</P>
 
             <SectionH3>mycelium call</SectionH3>
-            <P>Invokes an exported smart contract function directly from your terminal, outputting formatted response parameters.</P>
-            <P>Submit state-changing transaction (calls increment):</P>
+            <P>Invokes an exported smart contract function directly from your terminal, parsing positional arguments or JSON arguments and mapping them to correct Soroban types.</P>
+            <P>Submit state-changing transaction (requires signature and fee):</P>
             <CodeBlock
               language="bash"
-              code="mycelium call increment"
+              code="mycelium call increment --send --wallet .mycelium/wallet.json"
             />
             <P>Invoke view function (free query, no fees):</P>
             <CodeBlock
@@ -1122,7 +1283,7 @@ capabilities          = ["price-feed", "usd-xlm"]`}
               language="bash"
               code="mycelium call reset --args '[100, &quot;GDA2...&quot;]'"
             />
-            <P><em>Flags:</em> <InlineCode>--read-only</InlineCode> (view function simulation), <InlineCode>--contract &lt;id&gt;</InlineCode> (target contract), <InlineCode>--args &lt;json&gt;</InlineCode> (arguments array).</P>
+            <P><em>Flags:</em> <InlineCode>--read-only</InlineCode> (view function simulation), <InlineCode>--contract &lt;id&gt;</InlineCode> (target contract), <InlineCode>--network &lt;net&gt;</InlineCode> (network selector), <InlineCode>--send</InlineCode> (sign & submit state-changing tx), <InlineCode>--wallet &lt;path&gt;</InlineCode> (signing wallet path), <InlineCode>--args &lt;json&gt;</InlineCode> (JSON-formatted positional arguments array).</P>
 
             <SectionH3>mycelium resolve</SectionH3>
             <P>Performs a lookup on the Hive Registry to resolve the endpoint URL and public key details associated with an agent's registered name.</P>
@@ -1130,6 +1291,7 @@ capabilities          = ["price-feed", "usd-xlm"]`}
               language="bash"
               code="mycelium resolve oracle_node_alpha"
             />
+            <P><em>Flags:</em> <InlineCode>--network &lt;net&gt;</InlineCode> (target network), <InlineCode>--registry &lt;id&gt;</InlineCode> (override registry address).</P>
 
             <SectionH3>mycelium pay</SectionH3>
             <P>Dispatches a direct, signed payment of XLM from your wallet balance to a target registry agent name or wallet public key.</P>
@@ -1143,19 +1305,21 @@ capabilities          = ["price-feed", "usd-xlm"]`}
               language="bash"
               code="mycelium pay GDA23... 5.5"
             />
+            <P><em>Flags:</em> <InlineCode>--network &lt;net&gt;</InlineCode> (target network), <InlineCode>--wallet &lt;path&gt;</InlineCode> (wallet path).</P>
 
             <SectionH3>mycelium agents</SectionH3>
-            <P>Scans and outputs a listing of all active registered agents and metadata profiles present on the Hive Registry.</P>
+            <P>Scans and outputs a listing of all active registered agents and metadata profiles present on the Hive Registry via event streaming query filters.</P>
             <P>List all active agents:</P>
             <CodeBlock
               language="bash"
               code="mycelium agents"
             />
-            <P>Stream new registrations from block height:</P>
+            <P>Stream new registrations from block height without resolving full metadata profiles:</P>
             <CodeBlock
               language="bash"
               code="mycelium agents --start-ledger 4500000 --no-resolve"
             />
+            <P><em>Flags:</em> <InlineCode>--network &lt;net&gt;</InlineCode> (override network), <InlineCode>--registry &lt;id&gt;</InlineCode> (registry override), <InlineCode>--start-ledger &lt;num&gt;</InlineCode> (earliest ledger sequence to scan), <InlineCode>--no-resolve</InlineCode> (skip resolving full agent details, faster output).</P>
 
             <SectionH3>mycelium events</SectionH3>
             <P>Streams live on-chain contract events matching filtering criteria, highlighting transaction signatures and events topic hashes.</P>
@@ -1169,33 +1333,32 @@ capabilities          = ["price-feed", "usd-xlm"]`}
               language="bash"
               code="mycelium events --contract CCW3QNEL... --follow"
             />
+            <P><em>Flags:</em> <InlineCode>--contract &lt;id&gt;</InlineCode> (target contract), <InlineCode>--network &lt;net&gt;</InlineCode> (target network), <InlineCode>--start-ledger &lt;num&gt;</InlineCode> (starting sequence), <InlineCode>--follow</InlineCode> / <InlineCode>-f</InlineCode> (stream new events interactively).</P>
 
             <SectionH3>mycelium run</SectionH3>
-            <P>Starts the off-chain agent listener runtime execution process, allowing the agent to wait for incoming HTTP tasks and dispatch payments.</P>
+            <P>Starts the off-chain agent listener runtime execution process, allowing the agent to wait for incoming HTTP tasks and dispatch payments. It auto-reads the manifest parameters.</P>
             <P>Run agent listener process:</P>
             <CodeBlock
               language="bash"
               code="mycelium run"
             />
-            <P>Run limiting execution loop iterations:</P>
-            <CodeBlock
-              language="bash"
-              code="mycelium run --steps 10"
-            />
+            <P><em>Flags:</em> <InlineCode>--contract &lt;id&gt;</InlineCode> (target contract ID override).</P>
 
             <SectionH3>mycelium test</SectionH3>
-            <P>Runs a dry-run local test validation, simulating all contract methods and transaction loops on a mock environment without consuming network fees.</P>
+            <P>Runs a dry-run local test validation, simulating all contract methods and transaction loops on a mock environment without consuming network fees. Intercepts all state changes and logs estimated fees.</P>
             <CodeBlock
               language="bash"
               code="mycelium test"
             />
+            <P><em>Flags:</em> <InlineCode>--contract &lt;id&gt;</InlineCode> (target contract ID override).</P>
 
             <SectionH3>mycelium doctor</SectionH3>
-            <P>Validates local developer environments, ensuring that dependencies (`stellar-cli`, Rust compiler targets, RPC endpoints) are configured correctly.</P>
+            <P>Validates local developer environments, ensuring that dependencies (`stellar-cli`, Rust compiler targets like `wasm32v1-none`, RPC endpoints) are configured correctly and prints troubleshooting steps.</P>
             <CodeBlock
               language="bash"
               code="mycelium doctor"
             />
+            <P><em>Flags:</em> <InlineCode>--network &lt;net&gt;</InlineCode> (network to test).</P>
           </>
         );
 
@@ -1237,15 +1400,37 @@ capabilities          = ["price-feed", "usd-xlm"]`}
   [ Peer Agent Endpoint ]                            - Instance Storage Keys`}</pre>
             </div>
 
+            <SectionH2 id="arch-sandbox">Sandbox Compiler Environment</SectionH2>
+            <P>
+              For security, resource isolation, and consistency, all web compilation requests are executed inside a sandboxed Docker container on the IDE host server. This ensures that untrusted contract code cannot execute malicious commands on the host system.
+            </P>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>Isolation Model:</strong> The compiler runs in a container built from `mycelium-compiler:latest`.</li>
+              <li><strong>Network Constraint:</strong> Network access is completely disabled via <InlineCode>--network none</InlineCode> to prevent data exfiltration.</li>
+              <li><strong>Resource Quotas:</strong> Memory allocation is capped at <InlineCode>512 MB</InlineCode> and CPU usage is capped at <InlineCode>1.0</InlineCode> cores.</li>
+              <li><strong>Execution Timeout:</strong> A strict <InlineCode>30-second</InlineCode> timeout is enforced. If compilation exceeds this threshold, the sandbox process is forcefully terminated.</li>
+              <li><strong>Offline Caching:</strong> Cargo build caching is pre-warmed within the image. Compilation is run in cargo offline mode (<InlineCode>CARGO_NET_OFFLINE=true</InlineCode>) to prevent network fetching lag.</li>
+            </ul>
+
+            <SectionH2 id="arch-ide">Web IDE Architecture</SectionH2>
+            <P>
+              The Mycelium Web IDE consists of an optimized Next.js frontend coupled with a FastAPI backend acting as the API Gateway. Key design features include:
+            </P>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>Authentication:</strong> Users authenticate via GitHub OAuth. The API Gateway issues a secure, signed JWT session token to the frontend.</li>
+              <li><strong>Credentials Security:</strong> User credentials and GitHub access tokens are encrypted using AES-256-GCM before being stored in Firebase Realtime Database. They are decrypted in-memory only when communicating with GitHub on behalf of the user.</li>
+              <li><strong>Git-Backed Workspaces:</strong> Rather than using a local database, user workspaces are directly mapped to GitHub repositories. Changes are committed and retrieved dynamically via GitHub contents APIs.</li>
+            </ul>
+
             <SectionH2 id="arch-compiler">Compiler Transpilation Pipeline</SectionH2>
             <P>
               The Mycelium transpiler converts Python contract sources to WebAssembly through a strict four-stage pipeline designed to guarantee safety, type alignment, and performance:
             </P>
             <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 16, marginBottom: 24 }}>
               {[
-                { stage: "Stage 1 — Parsing & Lexing (parser.py)", desc: "Reads standard Python files, parses the AST structure, and validates variables annotated as contract state along with external methods marked by @external and @view decorators." },
-                { stage: "Stage 2 — AST Safety Validation (validator.py)", desc: "Filters code to ensure determinism. It rejects dynamic statements (like eval(), exec()), imports of unpinned libraries, loop lengths that cannot be verified statically, and unbounded storage allocations." },
-                { stage: "Stage 3 — Type Inference Mapping (codegen/inferrer.py)", desc: "Maps standard Python types to exact-width Rust equivalents targeting the soroban-sdk crate. For example: 'uint256' maps to 'U256', 'Mapping[K, V]' maps to 'Map<K, V>', and 'address' maps to 'Address'." },
+                { stage: "Stage 1 — Parsing & Lexing (parser.py)", desc: "Reads standard Python files, parses the AST structure, and validates variables annotated as contract state along with external methods marked by @external and @view decorators. It also evaluates module-level static constants." },
+                { stage: "Stage 2 — AST Safety Validation (validator.py)", desc: "Filters code to ensure determinism. It rejects dynamic statements (like eval(), exec()), imports of unpinned libraries, loop lengths that cannot be verified statically, and unbounded storage allocations. It also verifies that all type annotations map to supported Soroban primitives." },
+                { stage: "Stage 3 — Type Inference Mapping (codegen/inferrer.py)", desc: "Maps standard Python types to exact-width Rust equivalents targeting the soroban-sdk crate. For example: 'uint256' maps to 'U256', 'Mapping[K, V]' maps to 'Map<K, V>', and 'address' maps to 'Address'. It additionally infers types for storage keys (propagating prefixes like 'reg:' or 'addr:')." },
                 { stage: "Stage 4 — Transpilation & WASM Packaging (codegen/transpiler.py)", desc: "Generates Rust source files matching the inferred type bindings. It then calls 'stellar-cli' and 'rustc' targets to produce optimized WASM binaries ready for network deployment." }
               ].map((s, idx) => (
                 <div key={idx} style={{
@@ -1273,7 +1458,7 @@ capabilities          = ["price-feed", "usd-xlm"]`}
                 { label: "stellar-cli", value: "27.0.0" },
                 { label: "soroban-sdk", value: "26.1.0" },
                 { label: "Rust Target", value: "wasm32v1-none" },
-                { label: "Docker Image", value: "rust:1.95-slim" }
+                { label: "Docker Image", value: "rust:1.95-slim-bookworm" }
               ].map(t => (
                 <div key={t.label} style={{
                   padding: "12px 14px", borderRadius: 6,

@@ -1781,12 +1781,16 @@ export default function Playground() {
           }}>
             {/* Logo */}
             <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
-              <Link href="/" style={{
-                fontSize: "1.8rem",
-                color: "var(--accent-cyan)",
-                letterSpacing: "2px"
-              }} className="crt-glow">
-                MYCELIUM IDE
+              <Link href="/" style={{ display: "flex", alignItems: "center", color: "var(--foreground)", textDecoration: "none" }}>
+                <img src="/logo/logo.png" alt="Mycelium Logo" style={{
+                  height: "28px",
+                  width: "auto",
+                  marginRight: "8px",
+                  flexShrink: 0
+                }} />
+                <span className="font-display" style={{ fontSize: "1.2rem", fontWeight: 800, letterSpacing: "-0.04em" }}>
+                  Mycelium
+                </span>
               </Link>
               
               {/* Workspace Badge */}

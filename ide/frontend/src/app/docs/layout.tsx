@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -29,7 +29,7 @@ const NAV = [
       { id: "build-contract",    label: "Write a Contract" },
       { id: "build-code",        label: "Create an Agent" },
       { id: "build-run",         label: "Run Locally" },
-    ],
+      ],
   },
   {
     id: "deploy", label: "Deploy to Stellar", icon: <Globe size={14} />,
@@ -127,6 +127,20 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
   const [activeParent, setActiveParent] = useState("introduction");
   const [activeChild, setActiveChild] = useState("");
 
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Global Ctrl+K / Cmd+K listener to focus search input
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Update active navigation keys when route changes
   useEffect(() => {
     const { activeParent: parent, activeChild: child } = getActiveSectionFromPath(pathname);
@@ -185,45 +199,95 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
     }}>
       {/* ── Top header bar ── */}
       <header style={{
-        position: "fixed", top: 0, left: 0, right: 0, zIndex: 150,
-        height: 56, display: "flex", alignItems: "center",
-        padding: "0 24px 0 0",
-        background: "rgba(4,4,5,0.92)", backdropFilter: "blur(12px)",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 150,
+        background: "rgba(4, 4, 5, 0.9)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+        height: "64px"
       }}>
-        {/* Hamburger */}
-        <button
-          className="docs-hamburger"
-          onClick={() => setSidebarOpen(v => !v)}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            width: 56, height: 56, flexShrink: 0,
-            background: "none", border: "none", cursor: "pointer",
-            color: "rgba(255,255,255,0.6)",
-          }}
-        >
-          {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
-        </button>
+        <div style={{
+          width: "100%",
+          height: "100%",
+          padding: "0 24px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {/* Hamburger */}
+            <button
+              className="docs-hamburger"
+              onClick={() => setSidebarOpen(v => !v)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 36,
+                height: 36,
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: "6px",
+                cursor: "pointer",
+                color: "rgba(255, 255, 255, 0.6)",
+              }}
+            >
+              {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
 
-        {/* mobile brand (hidden on desktop where sidebar shows it) */}
-        <Link href="/" style={{
-          fontSize: "0.9rem", fontWeight: 700, color: "#fff",
-          letterSpacing: "-0.02em", textDecoration: "none",
-          marginRight: "auto",
-          marginLeft: 16
-        }} className="mobile-brand">Mycelium</Link>
+            <Link href="/" style={{ display: "flex", alignItems: "center", color: "var(--foreground)", textDecoration: "none" }}>
+              <img src="/logo/logo.png" alt="Mycelium Logo" style={{
+                height: "28px",
+                width: "auto",
+                marginRight: "8px",
+                flexShrink: 0
+              }} />
+              <span className="font-display" style={{ fontSize: "1.2rem", fontWeight: 800, letterSpacing: "-0.04em" }}>
+                Mycelium
+              </span>
+            </Link>
+          </div>
 
-        <nav style={{ display: "flex", gap: 24, alignItems: "center" }}>
-          <Link href="/#features" style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.4)", textDecoration: "none" }}>Features</Link>
-          <Link href="/agent" style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.4)", textDecoration: "none" }}>Agents</Link>
-          <Link href="/playground" style={{
-            fontSize: "0.76rem", padding: "6px 14px",
-            borderRadius: 6, fontWeight: 600,
-            background: "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.12)",
-            color: "#fff", textDecoration: "none",
-          }}>Playground</Link>
-        </nav>
+          <nav style={{ display: "none", gap: "28px" }} className="md-nav-links">
+            <a href="/#features"
+              style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", transition: "color 0.2s" }}
+              onMouseEnter={e => e.currentTarget.style.color = "#fff"}
+              onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.45)"}
+            >features</a>
+            <a href="/#architecture"
+              style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", transition: "color 0.2s" }}
+              onMouseEnter={e => e.currentTarget.style.color = "#fff"}
+              onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.45)"}
+            >architecture</a>
+            <Link href="/agent"
+              style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", transition: "color 0.2s" }}
+              onMouseEnter={e => e.currentTarget.style.color = "#fff"}
+              onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.45)"}
+            >agents</Link>
+            <Link href="/docs"
+              style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", display: "flex", alignItems: "center", gap: "4px" }}
+              onMouseEnter={e => e.currentTarget.style.color = "#fff"}
+              onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.45)"}
+            >docs</Link>
+          </nav>
+          <style jsx>{`
+            @media (min-width: 768px) {
+              .md-nav-links { display: flex !important; }
+            }
+          `}</style>
+
+          <Link href="/playground" className="premium-button-primary" style={{
+            padding: "7px 16px",
+            fontSize: "0.76rem",
+            borderRadius: "6px"
+          }}>
+            Launch Playground
+          </Link>
+        </div>
       </header>
 
       {/* ── Left Sidebar ── */}
@@ -252,19 +316,16 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
             borderBottom: "1px solid rgba(255,255,255,0.06)",
             display: "flex", alignItems: "center", justifyContent: "space-between",
           }}>
-            <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
-              <div style={{
-                width: 26, height: 26, borderRadius: 6,
-                background: "linear-gradient(135deg, var(--accent-cyan), var(--accent-purple))",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <Network size={13} color="#fff" />
-              </div>
-              <span style={{
-                fontSize: "0.9rem", fontWeight: 700,
-                color: "#fff", letterSpacing: "-0.02em",
-                fontFamily: "var(--font-sans)",
-              }}>Mycelium</span>
+            <Link href="/" style={{ display: "flex", alignItems: "center", color: "var(--foreground)", textDecoration: "none" }}>
+              <img src="/logo/logo.png" alt="Mycelium Logo" style={{
+                height: "28px",
+                width: "auto",
+                marginRight: "8px",
+                flexShrink: 0
+              }} />
+              <span className="font-display" style={{ fontSize: "1.2rem", fontWeight: 800, letterSpacing: "-0.04em" }}>
+                Mycelium
+              </span>
             </Link>
             <span style={{
               fontSize: "0.62rem", padding: "2px 7px", borderRadius: 20,
@@ -284,14 +345,31 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
             }}>
               <Search size={13} color="rgba(255,255,255,0.3)" />
               <input
+                ref={searchInputRef}
                 placeholder="Search docs..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 style={{
-                  flex: 1, background: "none", border: "none", outline: "none",
+                  flex: 1, minWidth: 0, background: "none", border: "none", outline: "none",
                   color: "#fff", fontSize: "0.82rem", fontFamily: "var(--font-sans)",
                 }}
               />
+              {!searchQuery && (
+                <span style={{
+                  flexShrink: 0,
+                  fontSize: "0.6rem",
+                  padding: "2px 5px",
+                  borderRadius: 4,
+                  background: "rgba(255, 255, 255, 0.08)",
+                  color: "rgba(255, 255, 255, 0.35)",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  fontFamily: "var(--font-mono)",
+                  userSelect: "none",
+                  pointerEvents: "none",
+                }}>
+                  Ctrl+K
+                </span>
+              )}
               {searchQuery && (
                 <button onClick={() => setSearchQuery("")} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.3)", padding: 0 }}>
                   <X size={11} />
@@ -401,7 +479,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
             borderTop: "1px solid rgba(255,255,255,0.06)",
             display: "flex", flexDirection: "column", gap: 6,
           }}>
-            <a href="https://github.com" target="_blank" rel="noreferrer" style={{
+            <a href="https://github.com/Srizdebnath" target="_blank" rel="noreferrer" style={{
               display: "flex", alignItems: "center", gap: 6,
               fontSize: "0.75rem", color: "rgba(255,255,255,0.35)",
               textDecoration: "none", transition: "color 0.2s",
@@ -422,7 +500,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
       </>
 
       {/* ── Main Layout Container ── */}
-      <main className="docs-main" style={{ minHeight: "100vh" }}>
+      <main className="docs-main" style={{ minHeight: "100vh", paddingTop: "64px" }}>
         {children}
       </main>
     </div>

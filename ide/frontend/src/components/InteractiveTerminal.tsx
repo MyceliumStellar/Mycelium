@@ -23,36 +23,41 @@ export default function InteractiveTerminal() {
       cmd: "pip install mycelium-stellar",
       outputs: [
         "Downloading mycelium_stellar-0.1.0-py3-none-any.whl (64 kB)",
-        "Installing collected packages: mycelium-stellar",
+        "Installing collected packages: mycelium-stellar, mycelium-sdk, mycelium-cli, mycelium-compiler",
         "Successfully installed mycelium-stellar-0.1.0"
       ]
     },
     {
-      cmd: "mycelium init",
+      cmd: "mycelium init my_project --non-interactive",
       outputs: [
-        "Creating project structure...",
-        "  ✓ mycelium.toml created",
-        "  ✓ requirements.txt created",
-        "Project initialized successfully."
+        "✓ Project 'my_project' initialized.",
+        "  Next: cd into it, run 'mycelium newwallet', then 'mycelium compile'."
       ]
     },
     {
-      cmd: "mycelium create research-agent",
+      cmd: "mycelium newwallet",
       outputs: [
-        "Creating research-agent template in standard Python...",
-        "  ✓ src/agents/research_agent.py created",
-        "  ✓ config/settings.yaml created"
+        "Encryption passphrase: *****",
+        "✓ Wallet created at .mycelium/wallet.json",
+        "  Public key: GBXAG4ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC"
+      ]
+    },
+    {
+      cmd: "mycelium compile",
+      outputs: [
+        "Compiling contract contract.py -> build/contract.wasm...",
+        "✓ Compilation successful! Output: build/contract.wasm",
+        "  WASM size: 14,352 bytes (14.02 KiB)"
       ]
     },
     {
       cmd: "mycelium deploy",
       outputs: [
-        "Compiling agent to WebAssembly (Soroban target)...",
-        "Uploading bytecode to Stellar Soroban Network...",
-        "✓ Agent deployed to Stellar",
-        "✓ Wallet created",
-        "✓ Registry connected",
-        "✓ Ready for autonomous execution"
+        "[deploy] Deploying build/contract.wasm to testnet as GBXAG4ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC...",
+        "[deploy] Wallet has 0 XLM — requesting Friendbot funding for GBXAG4ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC...",
+        "[deploy] Friendbot funding confirmed on-chain.",
+        "✓ Deployment successful! Contract ID: CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC",
+        "  Wrote contract_id + wallet_public_key to mycelium.toml"
       ]
     }
   ];

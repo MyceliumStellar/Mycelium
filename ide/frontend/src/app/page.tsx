@@ -80,7 +80,13 @@ export default function Home() {
           alignItems: "center",
           justifyContent: "space-between"
         }}>
-          <Link href="/" style={{ display: "flex", alignItems: "center", color: "var(--foreground)" }}>
+          <Link href="/" style={{ display: "flex", alignItems: "center", color: "var(--foreground)", textDecoration: "none" }}>
+            <img src="/logo/logo.png" alt="Mycelium Logo" style={{
+              height: "28px",
+              width: "auto",
+              marginRight: "8px",
+              flexShrink: 0
+            }} />
             <span className="font-display" style={{ fontSize: "1.2rem", fontWeight: 800, letterSpacing: "-0.04em" }}>
               Mycelium
             </span>
@@ -136,38 +142,7 @@ export default function Home() {
       }}>
         <div style={{ maxWidth: "860px", margin: "0 auto" }}>
 
-          {/* Tag pill */}
-          <motion.div
-            initial={{ opacity: 0, y: -14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease }}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              background: "rgba(255,255,255,0.03)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              padding: "5px 14px",
-              borderRadius: "20px",
-              marginBottom: "36px"
-            }}
-          >
-            <span style={{
-              width: "5px", height: "5px",
-              borderRadius: "50%",
-              backgroundColor: "var(--accent-cyan)",
-              animation: "pulse-cyan-purple 2s infinite"
-            }} />
-            <span style={{
-              fontSize: "0.68rem",
-              fontFamily: "var(--font-mono)",
-              color: "rgba(255,255,255,0.45)",
-              letterSpacing: "2px"
-            }}>
-              STELLAR SOROBAN AGENT SDK
-            </span>
-          </motion.div>
-
+          
           {/* H1 */}
           <motion.h1
             initial={{ opacity: 0, y: 22 }}
@@ -603,7 +578,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center" }}>
-                  <a href="https://github.com" target="_blank" rel="noopener noreferrer" style={{
+                  <a href="/docs" target="_blank" rel="noopener noreferrer" style={{
                     display: "inline-flex", alignItems: "center", gap: "4px",
                     fontSize: "0.78rem", fontWeight: 600, color: "var(--accent-cyan)",
                     whiteSpace: "nowrap"
@@ -780,7 +755,7 @@ export default function Home() {
                 onMouseEnter={e => e.currentTarget.style.color = "#fff"}
                 onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.3)"}
               >Stellar Network</a>
-              <a href="https://github.com" target="_blank" rel="noopener noreferrer"
+              <a href="https://github.com/Srizdebnath" target="_blank" rel="noopener noreferrer"
                 style={{ color: "rgba(255,255,255,0.3)", textShadow: "none" }}
                 onMouseEnter={e => e.currentTarget.style.color = "#fff"}
                 onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.3)"}
