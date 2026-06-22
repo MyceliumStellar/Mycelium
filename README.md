@@ -3,10 +3,26 @@
 ### The Python-First Framework for Smart Contract Development and Agentic Orchestration on Stellar
 
 [![Stellar Network](https://img.shields.io/badge/Powered%20by-Stellar%20Soroban-000000?style=flat&logo=stellar&logoColor=white)](https://stellar.org)
-[![Python Version](https://img.shields.io/badge/Python-3.10%20%7C%203.11-3776AB?style=flat&logo=python&logoColor=white)](https://python.org)
+[![Python Version](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB?style=flat&logo=python&logoColor=white)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-blue)](https://opensource.org/licenses/MIT)
 
 Mycelium is a comprehensive developer platform designed to eliminate the "Rust tax" for smart contract development on the Stellar network. It provides a Python-first compiler, SDK, CLI, and Web IDE that enables autonomous, on-chain agents to author contract logic, compile directly to WebAssembly, deploy to Soroban ledgers, and execute peer-to-peer economic coordination natively.
+
+---
+
+## 🔗 Production Deployment URL Hub
+
+* **Web IDE Frontend**: [https://mycelium.isriz.xyz](https://mycelium.isriz.xyz)
+* **Web IDE API Backend**: [https://mycelium-zgez.onrender.com](https://mycelium-zgez.onrender.com)
+* **On-Chain Hive Registry (Stellar Testnet)**: 
+  `CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC`
+
+### 📦 PyPI Package Registry Links
+The toolchain is published as modular packages on PyPI:
+* **`mycelium-stellar` (Full Bundle)**: [https://pypi.org/project/mycelium-stellar/](https://pypi.org/project/mycelium-stellar/)
+* **`mycelium-sdk` (Agent Core)**: [https://pypi.org/project/mycelium-sdk/](https://pypi.org/project/mycelium-sdk/)
+* **`mycelium-cli` (Scaffolding & Deploy)**: [https://pypi.org/project/mycelium-cli/](https://pypi.org/project/mycelium-cli/)
+* **`mycelium-compiler` (AST Transpiler)**: [https://pypi.org/project/mycelium-compiler/](https://pypi.org/project/mycelium-compiler/)
 
 ---
 
@@ -50,10 +66,10 @@ Mycelium/
 ├── mycelium/                  # Facade & DSL Package (distribution: mycelium-stellar)
 │   ├── types.py               # AST decorator validations, Env mocks, and type wrappers
 │   └── pyproject.toml         # Meta-package linking SDK, CLI, and Compiler dependencies
-├── compiler/                  # Component 1: Python-to-Soroban Compiler
+├── compiler/                  # Component 1: Python-to-Soroban Compiler (mycelium-compiler)
 │   ├── mycelium_compiler/     # AST parsers, type validators, and Rust codegen
 │   └── tests/                 # Compiler unit tests & benchmark suite
-├── sdk/                       # Component 2: Mycelium SDK (Agent Runtime Library)
+├── sdk/                       # Component 2: Mycelium SDK (mycelium-sdk)
 │   ├── mycelium_sdk/          # AgentContext, HiveClient, x402 settlement, crypto engines
 │   └── tests/                 # SDK test suite (including live testnet specs)
 ├── cli/                       # Component 3: Command Line Suite (mycelium-cli)
@@ -80,62 +96,112 @@ Mycelium/
 
 ### 1. Installation
 
-A single meta-package installs the entire toolchain — the `mycelium` DSL, the `mycelium_sdk` library, the `mycelium` CLI wrapper, and the Python→WASM compiler:
-
+Install the entire toolchain in one command:
 ```bash
 pip install mycelium-stellar
+```
+
+This meta-package automatically resolves and installs:
+* `mycelium-sdk` (on-chain agent context and x402 payment router)
+* `mycelium-compiler` (in-process AST visitor compile engine)
+* `mycelium-cli` (console scaffolding and deployment controllers)
+
+Verify the installation:
+```bash
 mycelium --help
 ```
 
-For developer workflows using editable paths (cloned codebase):
+---
+
+## 🛠️ CLI Commands Guide
+
+### `mycelium init <project_name>`
+Scaffolds a new Mycelium project. Launcehs an interactive setup wizard unless run with `-y` / `--yes`.
 ```bash
-python -m venv venv
-source venv/bin/activate
-pip install -e ./compiler -e ./sdk -e ./cli -e ./mycelium
-mycelium --help
+mycelium init my_agent --yes
 ```
 
-### 2. Scaffold a Project
-
-Use the interactive wizard to generate the default configuration and templates:
+### `mycelium newwallet`
+Generates a secure Ed25519 Stellar keypair, encrypts the seed with AES-256-GCM (600,000 PBKDF2 iterations), and saves it to `.mycelium/wallet.json`.
 ```bash
-mycelium init my_agent
-cd my_agent
+mycelium newwallet --passphrase "securepass"
 ```
 
-This creates a standard project structure:
-- `mycelium.toml`: Configuration file.
-- `contract.py`: Your smart contract authored in Python DSL.
-- `agent.py`: Your agent script leveraging the SDK context.
-- `.mycelium/`: Ignored folder holding the agent's keypair.
-
-### 3. Generate secure wallet keys
-
+### `mycelium fund`
+Requests Testnet XLM from the Stellar Friendbot API to fund the agent's wallet.
 ```bash
-mycelium newwallet
+mycelium fund
 ```
-This generates a secure Ed25519 wallet, deriving an AES-256-GCM encryption key from your passphrase. The secret seed is encrypted at rest inside `.mycelium/wallet.json`.
 
-### 4. Compile the smart contract
-
+### `mycelium check`
+Statically parses the contract AST for validation without creating a WASM output.
 ```bash
-mycelium compile
+mycelium check contract.py
 ```
-This runs the Python source code through static AST checks and compiles it into an optimized WebAssembly contract binary at `build/contract.wasm`.
 
-### 5. Deploy to Stellar Testnet
+### `mycelium compile`
+Compiles the Python DSL smart contract to optimized WASM bytecode.
+```bash
+mycelium compile --optimize
+```
 
+### `mycelium deploy`
+Deploys the compiled WASM binary to the ledger and updates `mycelium.toml` with the `contract_id`.
 ```bash
 mycelium deploy --network testnet
 ```
-This automatically funds the agent wallet using Stellar Friendbot (if balance is 0), deploys the contract to Stellar testnet via an isolated sandbox worker, and writes the `contract_id` back to `mycelium.toml`.
 
-### 6. Register Agent capabilities on-chain
-
+### `mycelium register`
+Broadcats the agent's name, public key, capabilities, and endpoint URL to the global on-chain Hive Registry.
 ```bash
 mycelium register
 ```
-This submits a signed transaction to the global Hive Registry, mapping the agent's unique name to its public address, service endpoint, and capability tags list.
+
+### `mycelium status`
+Displays wallet balance, contract deployment verification, and registry listing status.
+```bash
+mycelium status
+```
+
+### `mycelium run`
+Spins up the agent execution loop based on your `agent.py` script.
+```bash
+mycelium run
+```
+
+### `mycelium test`
+Runs local simulation tests to verify agent contract triggers without network fees.
+```bash
+mycelium test
+```
+
+---
+
+## 📝 Code Example: SDK Agent Interaction
+
+```python
+from mycelium import AgentContext, HiveClient, EscrowPaymentRouter
+
+# Load the local wallet context
+ctx = AgentContext(
+    keypair_path=".mycelium/wallet.json",
+    network_type="testnet",
+    passphrase="securepass"
+)
+
+# Resolve target agent details on the ledger
+hive = HiveClient(ctx)
+target_agent = hive.resolve_agent("arbitrage_worker_1")
+print(f"Target Agent Public Key: {target_agent['public_key']}")
+
+# Settle an escrow payment via x402 Commerce Protocol
+router = EscrowPaymentRouter(ctx)
+escrow_id = router.create_locked_escrow(
+    recipient=target_agent["public_key"],
+    amount="10.5",
+)
+print(f"Locked Escrow Transaction ID: {escrow_id}")
+```
 
 ---
 
@@ -152,14 +218,18 @@ The Mycelium compiler compiles Python AST elements into isomorphic Soroban Rust 
 
 ---
 
-## 🏃 Running the IDE Playground
+## 🏃 Running the IDE Playground Locally
 
-The Web IDE provides a local developer sandbox:
-1. Boot the environment using the startup runner:
+1. Install local backend and frontend dependencies:
+   ```bash
+   pip install -r ide/backend/requirements.txt -r requirements.txt
+   cd ide/frontend && npm install && cd ../..
+   ```
+2. Boot the environment using the startup runner:
    ```bash
    ./start.sh
    ```
-2. Open your browser and navigate to `http://localhost:3000/playground` to access the editor, compile, deploy, and inspect the reactive network visualizations.
+3. Open your browser and navigate to `http://localhost:3000/playground` to access the editor, compile, deploy, and inspect the reactive network visualizations.
 
 ---
 
