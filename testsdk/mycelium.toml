@@ -1,0 +1,26 @@
+[project]
+name = "testsdk"
+version = "0.1.0"
+author = "Developer"
+
+[agent]
+framework = "gemini"
+model = "gemini-2.5-flash"
+unique_name = "myc_6465185c"
+role = "A2A Counter"
+description = "A registered Counter agent running in the Mycelium ecosystem. Exposes stateful increment and count operations for A2A ledger verification."
+
+[onchain]
+source_contract = "contract.py"
+target_wasm = "build/contract.wasm"
+network = "testnet"
+contract_id = "CD5FRFFV6TBYSLUDSR6YG3V6POVLDUFNB4Q346WQQC4CDTIMJQ62P74S"
+wallet_public_key = "GCA3J3SCOEOSZOCGORKHNTVONYT7SBMF6CZDA7FMF2D2SBZ2V54OVWI6"
+
+[registry]
+hive_registry_address = "CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC"
+service_endpoint = "https://myc_6465185c.agents.mycelium.sh/api/v1"
+capabilities = [
+    "data-analysis",
+    "on-chain-accumulator",
+]

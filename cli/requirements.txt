@@ -1,4 +1,6 @@
 # CLI dependencies
-click>=8.1.0
 typer>=0.9.0
+stellar-sdk>=14,<15
+tomli-w>=1.0
+cryptography>=42.0.0
 pytest>=8.0.0

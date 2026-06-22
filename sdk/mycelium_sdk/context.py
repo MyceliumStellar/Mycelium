@@ -1,42 +1,419 @@
-from enum import Enum
+"""
+AgentContext — the sovereign execution context that maps Python calls to live
+Stellar/Soroban transactions (signing + RPC submission).
+
+`stellar_sdk` is imported lazily inside methods rather than at module import
+time. This is deliberate: the contract-authoring DSL (`mycelium`) re-exports
+`AgentContext`, and the compiler imports `mycelium` while building WASM in an
+environment that has no `stellar_sdk` installed. Merely importing this module
+must therefore stay free of the heavy on-chain dependency; only *constructing*
+an `AgentContext` pulls it in.
+"""
+
+import json
 import os
+import re
+import time
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any, List, Optional
+
+from mycelium_sdk import crypto
+from mycelium_sdk import rpc as rpc_helpers
+from mycelium_sdk.logging import get_logger
+from mycelium_sdk.constants import (
+    SOROBAN_RPC_URLS,
+    HORIZON_URLS,
+    NETWORK_PASSPHRASES,
+    normalize_network,
+)
+
+log = get_logger()
+
+# Process-wide accumulator of dry-run records across every AgentContext, so a
+# driver (e.g. `mycelium test`) that runs an agent script — and never sees the
+# context the script builds internally — can still report what it would submit.
+DRY_RUN_LOG: List[dict] = []
+
+
+def reset_dry_run_log() -> None:
+    """Clear the global dry-run accumulator (call before driving an agent)."""
+    DRY_RUN_LOG.clear()
+
+# Soroban Symbols are limited to [a-zA-Z0-9_] and <= 32 chars; longer/other
+# strings are encoded as Soroban Strings instead.
+_SYMBOL_RE = re.compile(r"^[a-zA-Z0-9_]{1,32}$")
+# Polling cadence while waiting for a submitted transaction to settle.
+_POLL_INTERVAL_SECONDS = 2
+_POLL_TIMEOUT_SECONDS = 60
+
 
 class StellarNetwork(Enum):
     TESTNET = "testnet"
     MAINNET = "mainnet"
     LOCAL = "local"
 
-class AgentContext:
-    def __init__(self, secret_key: str, network: StellarNetwork):
-        self.secret_key = secret_key
-        self.network = network
-        self.connected = True
-        
-    @classmethod
-    def from_keypair(cls, keypair_path: str, network: StellarNetwork = StellarNetwork.TESTNET):
-        """
-        Loads the agent's keypair from the specified path and initializes AgentContext.
-        """
-        # In a real environment, we would load the private key file
-        if not os.path.exists(keypair_path):
-            secret_key = "dummy_secret_key_from_path"
-        else:
-            with open(keypair_path, "r") as f:
-                secret_key = f.read().strip()
-        return cls(secret_key, network)
 
-    def call_contract(self, contract_id: str, function_name: str, args: list) -> any:
+@dataclass
+class TxResult:
+    """Result of a state-changing contract invocation."""
+    hash: str
+    status: str
+    return_value: Any = None
+
+
+def _require_stellar_sdk():
+    try:
+        import stellar_sdk  # noqa: F401
+    except ImportError as exc:  # pragma: no cover - environment dependent
+        raise ImportError(
+            "AgentContext requires the Stellar SDK. Install it with:\n"
+            "    pip install 'stellar-sdk>=12,<13'"
+        ) from exc
+    return stellar_sdk
+
+
+class AgentContext:
+    """
+    Manages an agent's signing keypair and Stellar/Soroban RPC clients, and
+    invokes on-chain contracts on its behalf.
+    """
+
+    def __init__(
+        self,
+        keypair_path: str = ".mycelium/wallet.json",
+        network_type: str = "testnet",
+        passphrase: Optional[str] = None,
+        dry_run: bool = False,
+    ):
+        from mycelium_sdk.banner import show_startup_banner
+        show_startup_banner()
+
+        self.network_type = normalize_network(network_type)
+        self._passphrase = passphrase
+        # Dry-run: state-changing calls are simulated, logged, and NOT submitted
+        # (no signature, no fee). Also enabled via MYCELIUM_DRY_RUN=1 so
+        # `mycelium test` can flip it without touching the agent script.
+        self.dry_run = dry_run or bool(os.environ.get("MYCELIUM_DRY_RUN"))
+        self.dry_run_log: List[dict] = []
+        self.keypair = self._load_and_decrypt_keypair(keypair_path)
+        self._init_network_clients()
+
+    def _init_network_clients(self):
+        """Wire up the Soroban/Horizon RPC clients and the network passphrase."""
+        _require_stellar_sdk()
+        from stellar_sdk import Server, Network
+        from stellar_sdk import SorobanServer
+
+        self.soroban_rpc = SorobanServer(SOROBAN_RPC_URLS[self.network_type])
+        self.horizon_server = Server(HORIZON_URLS[self.network_type])
+        # Use stellar_sdk's canonical passphrase constants (normalize_network
+        # guarantees network_type is exactly "testnet" or "mainnet").
+        if self.network_type == "testnet":
+            self.network_passphrase = Network.TESTNET_NETWORK_PASSPHRASE
+        else:
+            self.network_passphrase = Network.PUBLIC_NETWORK_PASSPHRASE
+
+    @classmethod
+    def read_only(cls, network_type: str = "testnet") -> "AgentContext":
         """
-        Invokes a contract function on Stellar Soroban network.
-        Handles serialization and mapping to XDR.
+        Build a wallet-free context for read-only (simulated) contract calls.
+
+        Discovery and `resolve_agent`-style views require no signature and no
+        funded account, so this skips wallet loading entirely and signs nothing.
+        A throwaway keypair is used purely as the simulation source account.
+        Calling a state-changing path on this context will fail at submit time.
         """
-        print(f"[SDK] Invoking {function_name} on contract {contract_id} with arguments: {args}")
-        # Placeholder returns based on expected function names in examples
-        if function_name == "get_price":
-            return 4500  # Default mock price
-        
-        # Receipt mock
-        class TxReceipt:
-            def __init__(self):
-                self.hash = "0x" + "a" * 64
-        return TxReceipt()
+        stellar_sdk = _require_stellar_sdk()
+        from stellar_sdk import Keypair
+
+        self = cls.__new__(cls)
+        self.network_type = normalize_network(network_type)
+        self._passphrase = None
+        self.dry_run = False
+        self.dry_run_log = []
+        self.keypair = Keypair.random()
+        self._init_network_clients()
+        return self
+
+    # ── back-compat constructor ──────────────────────────────────────────────
+    @classmethod
+    def from_keypair(cls, keypair_path: str, network: "StellarNetwork | str" = StellarNetwork.TESTNET):
+        """Construct from a wallet path and a StellarNetwork enum (or string)."""
+        net = network.value if isinstance(network, StellarNetwork) else str(network)
+        return cls(keypair_path=keypair_path, network_type=net)
+
+    # ── wallet ───────────────────────────────────────────────────────────────
+    def _load_and_decrypt_keypair(self, path: str):
+        """Load the encrypted wallet, decrypt the seed, return a signing Keypair."""
+        stellar_sdk = _require_stellar_sdk()
+        from stellar_sdk import Keypair
+
+        with open(path, "r") as f:
+            wallet_data = json.load(f)
+        decrypted_seed = self._decrypt_aes_gcm(
+            wallet_data["encrypted_secret"],
+            wallet_data["nonce"],
+            wallet_data["salt"],
+        )
+        return Keypair.from_secret(decrypted_seed)
+
+    def _decrypt_aes_gcm(self, ciphertext_hex: str, nonce_hex: str, salt_hex: str) -> str:
+        """Decrypt the wallet secret seed (AES-GCM). Returns the 'S...' seed string."""
+        passphrase = crypto.resolve_passphrase(self._passphrase)
+        return crypto.decrypt_secret(ciphertext_hex, nonce_hex, salt_hex, passphrase)
+
+    # ── argument marshalling ─────────────────────────────────────────────────
+    def _to_scval(self, arg: Any):
+        """
+        Convert a Python value to a Soroban SCVal. Pass a pre-built
+        `stellar_sdk.xdr.SCVal` to control exact integer widths / types.
+        """
+        from stellar_sdk import scval
+        from stellar_sdk import xdr as stellar_xdr
+
+        if isinstance(arg, stellar_xdr.SCVal):
+            return arg
+        if isinstance(arg, bool):
+            return scval.to_bool(arg)
+        # Mycelium DSL typed-int wrappers (U64(40), u32(3), I128(...), ...) are
+        # int subclasses; honor their declared width so calls to u64/u32/i64
+        # parameters don't get a default i128 and trap in the VM.
+        typed = self._typed_int_scval(arg, scval)
+        if typed is not None:
+            return typed
+        if isinstance(arg, int):
+            return scval.to_int128(arg)
+        if isinstance(arg, bytes):
+            return scval.to_bytes(arg)
+        if isinstance(arg, str):
+            from stellar_sdk import StrKey
+
+            if StrKey.is_valid_ed25519_public_key(arg) or StrKey.is_valid_contract(arg):
+                return scval.to_address(arg)
+            if _SYMBOL_RE.match(arg):
+                return scval.to_symbol(arg)
+            return scval.to_string(arg)
+        if isinstance(arg, list):
+            return scval.to_vec([self._to_scval(a) for a in arg])
+        raise TypeError(
+            f"Cannot convert {type(arg).__name__} to SCVal; "
+            "pass a width-correct value via mycelium_sdk.scval (e.g. u64(x))."
+        )
+
+    # Map Mycelium DSL int-type class names -> the matching SCVal constructor.
+    _TYPED_INT_CTORS = {
+        "u32": "to_uint32", "U32": "to_uint32",
+        "u64": "to_uint64", "U64": "to_uint64",
+        "U128": "to_uint128",
+        "i32": "to_int32", "I32": "to_int32",
+        "i64": "to_int64",
+        "i128": "to_int128", "I128": "to_int128",
+    }
+
+    @classmethod
+    def _typed_int_scval(cls, arg: Any, scval):
+        """Return an SCVal for a DSL typed-int wrapper, or None for a plain int."""
+        if not isinstance(arg, int) or type(arg) is int or isinstance(arg, bool):
+            return None
+        ctor = cls._TYPED_INT_CTORS.get(type(arg).__name__)
+        return getattr(scval, ctor)(int(arg)) if ctor else None
+
+    def _marshal_args(self, contract_id: str, function_name: str, args: List[Any], scval):
+        """
+        Convert Python args to SCVals, using the contract spec to pick integer
+        widths automatically when available. Falls back to `_to_scval` per value
+        if the spec can't be fetched, so a plain int still works (as i128) and
+        DSL wrappers (U64(x)) keep working regardless.
+        """
+        from mycelium_sdk import spec as spec_mod
+
+        return spec_mod.marshal_args(
+            self.soroban_rpc, contract_id, function_name, args, scval, self._to_scval
+        )
+
+    # ── invocation ───────────────────────────────────────────────────────────
+    def call_contract(
+        self,
+        contract_id: str,
+        function_name: str,
+        args: List[Any],
+        read_only: bool = False,
+    ) -> Any:
+        """
+        Invoke `function_name(args)` on `contract_id`.
+
+        - read_only=True: simulate only (no fee, no signature) and return the
+          decoded Python value. Use for view/getter calls (e.g. resolve_agent).
+        - read_only=False: simulate → assemble footprint/fees → sign → submit →
+          poll until settled, returning a TxResult(hash, status, return_value).
+        """
+        stellar_sdk = _require_stellar_sdk()
+        from stellar_sdk import TransactionBuilder, scval
+        from stellar_sdk import xdr as stellar_xdr
+        from stellar_sdk.exceptions import BaseRequestError
+        from stellar_sdk.soroban_rpc import GetTransactionStatus
+
+        log.info(f"[SDK] Invoking {function_name} on {contract_id} (read_only={read_only})...")
+        try:
+            if read_only:
+                # Simulation needs only a syntactically valid source account, not
+                # a funded/existing one — build it locally so views (resolve,
+                # discovery, getters) work without a wallet or RPC round-trip.
+                from stellar_sdk import Account
+
+                source = Account(self.keypair.public_key, 0)
+            else:
+                source = self.soroban_rpc.load_account(self.keypair.public_key)
+            sc_args = self._marshal_args(contract_id, function_name, args, scval)
+
+            tx = (
+                TransactionBuilder(source, self.network_passphrase, base_fee=100)
+                .append_invoke_contract_function_op(contract_id, function_name, sc_args)
+                .set_timeout(300)
+                .build()
+            )
+
+            # Always simulate first to surface contract errors cheaply. The
+            # simulation also yields the function's return value deterministically
+            # — we use it as the authoritative return for state-changing calls
+            # too, since post-submit TransactionMetaV4 (protocol 23) is not
+            # decodable by stellar-sdk 12.x. Retried on transient RPC errors.
+            sim = rpc_helpers.with_retry(
+                lambda: self.soroban_rpc.simulate_transaction(tx),
+                label="simulate_transaction",
+            )
+            if sim.error:
+                raise RuntimeError(f"Simulation failed: {sim.error}")
+
+            sim_return = self._decode_sim_result(sim, scval, stellar_xdr)
+            if read_only:
+                return sim_return
+
+            # Dry-run: record what we WOULD submit (incl. estimated fee from the
+            # simulation) and return without signing or spending.
+            if self.dry_run:
+                est_fee = getattr(sim, "min_resource_fee", None)
+                record = {
+                    "contract_id": contract_id,
+                    "function": function_name,
+                    "args": list(args),
+                    "sim_return": sim_return,
+                    "est_fee_stroops": int(est_fee) if est_fee is not None else None,
+                }
+                self.dry_run_log.append(record)
+                DRY_RUN_LOG.append(record)
+                log.info(
+                    f"[dry-run] would submit {function_name} on {contract_id} "
+                    f"(est fee {est_fee} stroops) — not signing or submitting."
+                )
+                return TxResult(hash="DRY-RUN", status="SIMULATED", return_value=sim_return)
+
+            # State-changing: assemble (footprint + fees), sign, submit, poll.
+            # prepare/submit/poll are all retried on transient RPC failures;
+            # submit re-sends the SAME signed tx on TRY_AGAIN_LATER (idempotent).
+            prepared = rpc_helpers.with_retry(
+                lambda: self.soroban_rpc.prepare_transaction(tx),
+                label="prepare_transaction",
+            )
+            prepared.sign(self.keypair)
+            send = rpc_helpers.submit_transaction(self.soroban_rpc, prepared)
+            tx_hash = send.hash
+
+            deadline = time.time() + _POLL_TIMEOUT_SECONDS
+            while True:
+                get = rpc_helpers.with_retry(
+                    lambda: self.soroban_rpc.get_transaction(tx_hash),
+                    label="get_transaction",
+                )
+                if get.status != GetTransactionStatus.NOT_FOUND:
+                    break
+                if time.time() > deadline:
+                    raise TimeoutError(
+                        f"Transaction {tx_hash} did not settle within "
+                        f"{_POLL_TIMEOUT_SECONDS}s."
+                    )
+                time.sleep(_POLL_INTERVAL_SECONDS)
+
+            if get.status == GetTransactionStatus.FAILED:
+                raise RuntimeError(f"Transaction {tx_hash} FAILED: {get.result_xdr}")
+
+            # Prefer the post-settlement meta return value when decodable
+            # (meta v3); otherwise fall back to the simulated return value.
+            settled_return = self._decode_tx_result(get, scval, stellar_xdr)
+            return TxResult(
+                hash=tx_hash,
+                status="SUCCESS",
+                return_value=settled_return if settled_return is not None else sim_return,
+            )
+        except BaseRequestError as error:
+            log.error(f"[SDK ERROR] Soroban Contract Invocation Failed: {error}")
+            raise
+
+    async def acall_contract(
+        self,
+        contract_id: str,
+        function_name: str,
+        args: List[Any],
+        read_only: bool = False,
+    ) -> Any:
+        """
+        Async wrapper around `call_contract`.
+
+        Runs the (blocking) RPC submit/poll on a worker thread via
+        `asyncio.to_thread`, so an agent can `await` many contract calls
+        concurrently without the GIL-bound sync path serializing them. Same
+        return contract as `call_contract` (decoded value for read-only, a
+        `TxResult` for state-changing).
+        """
+        import asyncio
+
+        return await asyncio.to_thread(
+            self.call_contract, contract_id, function_name, args, read_only
+        )
+
+    # ── typed contract client ────────────────────────────────────────────────
+    def contract(self, contract_id: str) -> "Any":
+        """
+        Return a typed client for `contract_id`: `ctx.contract(cid).add(40)`.
+
+        Methods are discovered from the contract's on-chain spec, so calls read
+        like native method invocations. `client.add(40)` signs+submits;
+        `client.read.get_count()` simulates; `client.aio.*` returns awaitables.
+        See `mycelium_sdk.contract_client.ContractClient`.
+        """
+        from mycelium_sdk.contract_client import ContractClient
+
+        return ContractClient(self, contract_id)
+
+    # ── return-value decoding ────────────────────────────────────────────────
+    @staticmethod
+    def _decode_sim_result(sim, scval, stellar_xdr):
+        if not sim.results:
+            return None
+        xdr = sim.results[0].xdr
+        if not xdr:
+            return None
+        return scval.to_native(stellar_xdr.SCVal.from_xdr(xdr))
+
+    @staticmethod
+    def _decode_tx_result(get, scval, stellar_xdr):
+        """Decode the return value from settled tx meta (v3 or protocol-23 v4).
+
+        Returns None if the meta is missing/undecodable, in which case the caller
+        falls back to the simulated return value.
+        """
+        if not get.result_meta_xdr:
+            return None
+        try:
+            meta = stellar_xdr.TransactionMeta.from_xdr(get.result_meta_xdr)
+            soroban_meta = None
+            if getattr(meta, "v3", None) is not None:
+                soroban_meta = meta.v3.soroban_meta
+            elif getattr(meta, "v4", None) is not None:
+                soroban_meta = meta.v4.soroban_meta
+            if soroban_meta is None or soroban_meta.return_value is None:
+                return None
+            return scval.to_native(soroban_meta.return_value)
+        except (AttributeError, ValueError):
+            return None

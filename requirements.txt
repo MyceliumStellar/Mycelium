@@ -5,8 +5,10 @@
 click>=8.1.0
 typer>=0.9.0
 
-# SDK
+# SDK & on-chain
 requests>=2.31.0
+stellar-sdk>=14,<15
+tomli-w>=1.0
 
 # Backend FastAPI
 fastapi>=0.110.0

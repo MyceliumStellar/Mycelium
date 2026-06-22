@@ -1783,6 +1783,22 @@ export default function Playground() {
               }}>
                 REPO: {activeWorkspace || "NONE"}
               </div>
+
+              {/* Agents Link Badge */}
+              <Link href="/agent" style={{
+                fontSize: "0.8rem",
+                fontFamily: "var(--font-mono)",
+                background: "#0c0c0e",
+                border: "1px solid var(--border-color)",
+                padding: "2px 8px",
+                color: "var(--accent-cyan)",
+                transition: "all 0.2s"
+              }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = "var(--accent-cyan)"}
+              onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border-color)"}
+              >
+                AGENTS NETWORK
+              </Link>
             </div>
 
             {/* Wallet & User Actions */}

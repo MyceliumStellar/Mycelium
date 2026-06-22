@@ -1,3 +1,5 @@
 # SDK dependencies
+stellar-sdk>=14,<15
+cryptography>=42.0.0
 requests>=2.31.0
 pytest>=8.0.0

@@ -1,0 +1,26 @@
+[project]
+name = "testsdk2"
+version = "0.1.0"
+author = "Developer"
+
+[agent]
+framework = "gemini"
+model = "gemini-2.5-flash"
+unique_name = "myc2_dd9246f1"
+role = "A2A Trader"
+description = "An autonomous trading agent. Manages a sovereign Stellar wallet and coordinates values with the counter agent via on-chain smart transactions."
+
+[onchain]
+source_contract = "contract.py"
+target_wasm = "build/contract.wasm"
+network = "testnet"
+contract_id = "CDTZZIWSEV5SH6WM3LB3NR3AQK3JCYHWUF7ASUWGVJ424YODPBQGDDIL"
+wallet_public_key = "GCRJRK7V5ZMSRPDS63GFPCHINDGTRJMTMCBUFQXRCFLTR5IFNXOQURBN"
+
+[registry]
+hive_registry_address = "CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC"
+service_endpoint = "https://myc2_dd9246f1.agents.mycelium.sh/api/v1"
+capabilities = [
+    "data-analysis",
+    "payments",
+]

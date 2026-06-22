@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# Distribution name on PyPI is `mycelium-stellar` (the bare `mycelium` name is
+# taken by an unrelated project). The IMPORT name stays `import mycelium` — see
+# [tool.setuptools.package-dir] below.
+name = "mycelium-stellar"
+version = "0.1.0"
+description = "Mycelium — Python-first smart-contract + agent toolchain for Stellar/Soroban (one install: DSL, SDK, CLI, compiler). Install: pip install mycelium-stellar; import mycelium."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Mycelium" }]
+# Installing `mycelium-stellar` pulls in the whole toolchain: this package
+# provides the `import mycelium` DSL + SDK facade, and the dependencies below
+# provide the `mycelium_sdk` library, the `mycelium` CLI command (from
+# mycelium-cli's [project.scripts]), and the Python-to-WASM compiler.
+dependencies = [
+    "mycelium-sdk==0.1.0",
+    "mycelium-cli==0.1.0",
+    "mycelium-compiler==0.1.0",
+]
+
+[project.optional-dependencies]
+langgraph = ["langgraph", "langchain-core"]
+gemini = ["google-generativeai"]
+anthropic = ["anthropic"]
+
+[project.urls]
+Homepage = "https://github.com/Srizdebnath/Mycelium"
+
+# The package `mycelium` lives directly in this directory (flat-as-package
+# layout), so map the import name to "." explicitly rather than auto-discovering.
+[tool.setuptools]
+packages = ["mycelium"]
+
+[tool.setuptools.package-dir]
+mycelium = "."

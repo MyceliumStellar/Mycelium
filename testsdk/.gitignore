@@ -1,0 +1,4 @@
+.mycelium/
+build/
+.env
+__pycache__/

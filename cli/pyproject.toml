@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mycelium-cli"
+version = "0.1.0"
+description = "Mycelium CLI — init, newwallet, compile, deploy, register"
+requires-python = ">=3.10"
+dependencies = [
+    "typer>=0.9",
+    "tomli-w>=1.0",
+    "stellar-sdk>=14,<15",
+]
+
+[project.scripts]
+mycelium = "mycelium_cli.main:main"
+
+[tool.setuptools.packages.find]
+include = ["mycelium_cli*"]

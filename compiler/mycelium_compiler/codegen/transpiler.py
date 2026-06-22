@@ -945,13 +945,16 @@ class RustTranspiler(ast.NodeVisitor):
             elif x == 'crypto' and y == 'sha256':
                 arg = self.transpile_expr(node.args[0])
                 arg_type = self.get_expr_type(node.args[0])
+                # Wrap in an explicit Bytes::from: Hash<N> has several Into impls
+                # ([u8; N], Bytes, BytesN<N>), so a bare `.into()` is ambiguous in
+                # comparison contexts. From<Hash<N>> for Bytes is concrete.
                 if arg_type == "soroban_sdk::Bytes" or arg_type == "Bytes":
-                    return f"env.crypto().sha256(&{arg}).into()"
-                return f"env.crypto().sha256(&soroban_sdk::Bytes::try_from_val(&env, &{arg}.into_val(&env)).unwrap()).into()"
+                    return f"soroban_sdk::Bytes::from(env.crypto().sha256(&{arg}))"
+                return f"soroban_sdk::Bytes::from(env.crypto().sha256(&soroban_sdk::Bytes::try_from_val(&env, &{arg}.into_val(&env)).unwrap()))"
             elif x == 'crypto' and y == 'keccak256':
                     # Multiple args: concat and hash
                     args_str = ", ".join([f"{self.transpile_expr(a)}.into_val(&env)" for a in node.args])
-                    return f"env.crypto().keccak256(&soroban_sdk::Bytes::try_from_val(&env, &soroban_sdk::vec![&env, {args_str}].into_val(&env)).unwrap()).into()"
+                    return f"soroban_sdk::Bytes::from(env.crypto().keccak256(&soroban_sdk::Bytes::try_from_val(&env, &soroban_sdk::vec![&env, {args_str}].into_val(&env)).unwrap()))"
             elif x == 'crypto' and y == 'verify_sig_ed25519':
                 pk = self.transpile_expr(node.args[0])
                 msg = self.transpile_expr(node.args[1])

@@ -60,7 +60,11 @@ ide/
     │   └── app/
     │       ├── globals.css    # Neon-glow retro styling, drag-resizer classes
     │       ├── layout.tsx     # Next.js root layout
-    │       └── page.tsx       # Web IDE (editor, tabs, wallet/deploy, file tree)
+    │       ├── page.tsx       # Marketing and product landing page with navbar navigation
+    │       ├── agent/
+    │       │   └── page.tsx   # Swarm agent directory network graph visualization
+    │       └── playground/
+    │           └── page.tsx   # Full browser Monaco IDE workspace dashboard
     ├── package.json           # Node dependencies
     └── tsconfig.json          # TypeScript configuration
 ```
@@ -143,6 +147,14 @@ On backend startup, a daemon thread calls `ensure_stellar_cli()` to pre-fetch
 the `stellar` binary so the first deployment isn't delayed. The compiler image
 itself is built/verified by `start.sh`. See [compiler.md](./compiler.md) for the
 image internals.
+
+## 🖥️ Frontend Pages & Routing
+
+The Next.js application routes traffic across three distinct user views:
+
+* **`/` (Landing Page)**: The primary branding page, illustrating the core value proposition, interactive CLI emulation terminals, bento feature matrices, and agent architecture overviews.
+* **`/agent` (Agent Swarms Network)**: A live visual directory displaying all running agents registered in the Hive Registry. It shows the on-chain Registry address, connects agents as glowing nodes with interactive links/wires, and displays selected agent metadata panels on tap/click.
+* **`/playground` (Playground IDE)**: The full Monaco-powered browser environment containing workspace management, code compilation logs, transaction simulation results, and wallet balances.
 
 ---
 
