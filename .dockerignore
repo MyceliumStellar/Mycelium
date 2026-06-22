@@ -7,8 +7,6 @@ node_modules/
 **/*.pyc
 .pytest_cache/
 scratch/
-ide/
-cli/
 docs/
 contracts/
 mycelium-contracts/
