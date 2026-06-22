@@ -6,7 +6,8 @@ import {
   Terminal, Code, Cpu, ShoppingBag, Layers,
   Copy, Check, Search, Menu, X, Zap, Globe,
   Package, FileCode, Play, ExternalLink,
-  AlertTriangle, Info, Network, ArrowRight, Shield, Database, CpuIcon
+  AlertTriangle, Info, Network, ArrowRight, Shield, Database, CpuIcon,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
 
 // ─── Sub-Components ─────────────────────────────────────────────────────────
@@ -1138,6 +1139,122 @@ network = "testnet"`}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ maxWidth: 740, padding: "0 32px 120px", margin: "0 auto" }}>
           {renderContent()}
+
+          {/* Next / Previous Page Navigation */}
+          {(() => {
+            const PAGES = [
+              { id: "introduction", label: "Introduction" },
+              { id: "quick-start", label: "Quick Start" },
+              { id: "core-concepts", label: "Core Concepts" },
+              { id: "build-agent", label: "Build Your First Agent" },
+              { id: "deploy", label: "Deploy to Stellar" },
+              { id: "commerce", label: "Commerce" },
+              { id: "registry", label: "Registry" },
+              { id: "sdk", label: "SDK Reference" },
+              { id: "cli", label: "CLI Reference" },
+              { id: "architecture", label: "Architecture" },
+            ];
+
+            const currentIndex = PAGES.findIndex(p => p.id === slug);
+            const prevPage = currentIndex > 0 ? PAGES[currentIndex - 1] : null;
+            const nextPage = currentIndex < PAGES.length - 1 ? PAGES[currentIndex + 1] : null;
+
+            if (!prevPage && !nextPage) return null;
+
+            return (
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 16,
+                marginTop: 64,
+                marginBottom: 16,
+                width: "100%",
+              }}>
+                {prevPage ? (
+                  <Link
+                    href={`/docs/${prevPage.id}`}
+                    style={{
+                      flex: 1,
+                      padding: "16px 20px",
+                      borderRadius: 8,
+                      border: "1px solid rgba(255, 255, 255, 0.06)",
+                      background: "rgba(255, 255, 255, 0.01)",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      textDecoration: "none",
+                      transition: "all 0.2s ease-in-out",
+                    }}
+                    className="premium-card"
+                  >
+                    <span style={{
+                      fontSize: "0.72rem",
+                      color: "rgba(255, 255, 255, 0.35)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      marginBottom: 4,
+                    }}>
+                      Previous
+                    </span>
+                    <span style={{
+                      fontSize: "0.95rem",
+                      fontWeight: 600,
+                      color: "var(--accent-cyan)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}>
+                      <ChevronLeft size={14} /> {prevPage.label}
+                    </span>
+                  </Link>
+                ) : (
+                  <div style={{ flex: 1 }} />
+                )}
+
+                {nextPage ? (
+                  <Link
+                    href={`/docs/${nextPage.id}`}
+                    style={{
+                      flex: 1,
+                      padding: "16px 20px",
+                      borderRadius: 8,
+                      border: "1px solid rgba(255, 255, 255, 0.06)",
+                      background: "rgba(255, 255, 255, 0.01)",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-end",
+                      textDecoration: "none",
+                      transition: "all 0.2s ease-in-out",
+                      textAlign: "right",
+                    }}
+                    className="premium-card"
+                  >
+                    <span style={{
+                      fontSize: "0.72rem",
+                      color: "rgba(255, 255, 255, 0.35)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      marginBottom: 4,
+                    }}>
+                      Next
+                    </span>
+                    <span style={{
+                      fontSize: "0.95rem",
+                      fontWeight: 600,
+                      color: "var(--accent-cyan)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}>
+                      {nextPage.label} <ChevronRight size={14} />
+                    </span>
+                  </Link>
+                ) : (
+                  <div style={{ flex: 1 }} />
+                )}
+              </div>
+            );
+          })()}
 
           {/* Page Footer */}
           <div style={{
