@@ -437,3 +437,13 @@ a:hover {
   background: rgba(255, 255, 255, 0.07);
   color: rgba(255, 255, 255, 0.88);
 }
+
+/* Table of Contents responsive display */
+.docs-toc {
+  display: none;
+}
+@media (min-width: 1100px) {
+  .docs-toc {
+    display: block;
+  }
+}
