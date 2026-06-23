@@ -22,9 +22,9 @@ export default function InteractiveTerminal() {
     {
       cmd: "pip install mycelium-stellar",
       outputs: [
-        "Downloading mycelium_stellar-0.1.0-py3-none-any.whl (64 kB)",
+        "Downloading mycelium_stellar-0.2.0-py3-none-any.whl (64 kB)",
         "Installing collected packages: mycelium-stellar, mycelium-sdk, mycelium-cli, mycelium-compiler",
-        "Successfully installed mycelium-stellar-0.1.0"
+        "Successfully installed mycelium-stellar-0.2.0"
       ]
     },
     {

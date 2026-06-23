@@ -176,7 +176,7 @@ export default function Home() {
           >
             <span>Python-first</span>
             <span>Stellar Soroban</span>
-            <span>v0.1.0-alpha</span>
+            <span>v0.2.0</span>
           </motion.div>
 
           {/* Subheadline */}
@@ -799,7 +799,7 @@ export default function Home() {
               alignItems: "center",
               gap: "8px"
             }}>
-              <span>v0.1.0-alpha</span>
+              <span>v0.2.0</span>
               <span>·</span>
               <span>Powered by Stellar Soroban</span>
             </div>

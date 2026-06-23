@@ -724,7 +724,7 @@ print(f"Increment transaction successful! Hash: {tx.hash}")`}
               filename="mycelium.toml"
               code={`[project]
 name    = "counter_agent"
-version = "0.1.0"
+version = "0.2.0"
 author  = "Developer Name"
 
 [agent]
@@ -1169,7 +1169,7 @@ lg_tool = make_contract_tool(
               language="toml"
               code={`[project]
 name    = "my_agent_project"
-version = "0.1.0"
+version = "0.2.0"
 author  = "Developer Name <dev@example.com>"
 
 [agent]

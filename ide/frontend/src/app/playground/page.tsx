@@ -74,7 +74,7 @@ export default function Playground() {
   // Terminal State & Active Tab
   const [activeTab, setActiveTab] = useState<"console" | "compiler" | "deploy" | "interaction" | "wallet" | "network" | "problems">("console");
   const [terminalLogs, setTerminalLogs] = useState<{ type: string; text: string; time: string }[]>([
-    { type: "info", text: "Mycelium OS v0.1.0-alpha loaded. Type 'help' for command list.", time: "23:27:18" },
+    { type: "info", text: "Mycelium OS v0.2.0 loaded. Type 'help' for command list.", time: "23:27:18" },
     { type: "success", text: "Stellar Soroban Development Env: ONLINE", time: "23:27:18" }
   ]);
   const [compilerLogs, setCompilerLogs] = useState<{ type: string; text: string; time: string }[]>([]);
@@ -790,7 +790,7 @@ export default function Playground() {
       case "sysinfo":
         addTerminalLog("info", "Mycelium Developer System Info:");
         addTerminalLog("info", "  OS Version:     Linux x86_64");
-        addTerminalLog("info", "  Mycelium core:  v0.1.0-alpha");
+        addTerminalLog("info", "  Mycelium core:  v0.2.0");
         addTerminalLog("info", "  Next.js Build:  v16.2.9");
         addTerminalLog("info", "  React Fiber:    v19.0.0");
         addTerminalLog("info", `  Backend API:    FastAPI on ${API_BASE_URL}`);
