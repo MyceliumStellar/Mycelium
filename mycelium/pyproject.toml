@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 # taken by an unrelated project). The IMPORT name stays `import mycelium` — see
 # [tool.setuptools.package-dir] below.
 name = "mycelium-stellar"
-version = "0.1.0"
+version = "0.2.0"
 description = "Mycelium — Python-first smart-contract + agent toolchain for Stellar/Soroban (one install: DSL, SDK, CLI, compiler). Install: pip install mycelium-stellar; import mycelium."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -17,9 +17,9 @@ authors = [{ name = "Mycelium" }]
 # provide the `mycelium_sdk` library, the `mycelium` CLI command (from
 # mycelium-cli's [project.scripts]), and the Python-to-WASM compiler.
 dependencies = [
-    "mycelium-sdk==0.1.0",
-    "mycelium-cli==0.1.0",
-    "mycelium-compiler==0.1.0",
+    "mycelium-sdk==0.2.0",
+    "mycelium-cli==0.2.0",
+    "mycelium-compiler==0.2.0",
 ]
 
 [project.optional-dependencies]
