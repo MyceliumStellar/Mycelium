@@ -272,7 +272,15 @@ def create_repository(repo_req: RepoCreate, session = Depends(get_current_user_s
     }
     res = requests.post(url, json=payload, headers=headers)
     if res.status_code != 201:
-        err_msg = res.json().get("message", "Failed to create repository")
+        try:
+            err_data = res.json()
+            err_msg = err_data.get("message", "Failed to create repository")
+            if "errors" in err_data and isinstance(err_data["errors"], list):
+                msgs = [err["message"] for err in err_data["errors"] if isinstance(err, dict) and "message" in err]
+                if msgs:
+                    err_msg = f"{err_msg}: {', '.join(msgs)}"
+        except Exception:
+            err_msg = "Failed to create repository"
         raise HTTPException(status_code=res.status_code, detail=err_msg)
         
     repo_data = res.json()
@@ -383,8 +391,16 @@ def _gh_create_repo(github_token: str, name: str) -> dict:
                  "Accept": "application/vnd.github.v3+json"},
     )
     if res.status_code != 201:
-        raise HTTPException(status_code=res.status_code,
-                            detail=res.json().get("message", "Failed to create repository"))
+        try:
+            err_data = res.json()
+            err_msg = err_data.get("message", "Failed to create repository")
+            if "errors" in err_data and isinstance(err_data["errors"], list):
+                msgs = [err["message"] for err in err_data["errors"] if isinstance(err, dict) and "message" in err]
+                if msgs:
+                    err_msg = f"{err_msg}: {', '.join(msgs)}"
+        except Exception:
+            err_msg = "Failed to create repository"
+        raise HTTPException(status_code=res.status_code, detail=err_msg)
     return res.json()
 
 
