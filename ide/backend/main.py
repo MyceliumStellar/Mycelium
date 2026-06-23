@@ -407,7 +407,7 @@ def _gh_commit_file(github_token: str, username: str, repo: str, filename: str, 
 
 
 @app.post("/api/models")
-def list_models_endpoint(req: ModelsRequest, session = Depends(get_current_user_session)):
+def list_models_endpoint(req: ModelsRequest):
     """
     Proxy live model discovery for a provider so the API key never round-trips
     through the browser / hits CORS. Mirrors the CLI's `_select_model`.
