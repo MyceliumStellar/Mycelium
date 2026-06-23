@@ -4,23 +4,19 @@
 Mirrors the proven flow in the IDE backend's /api/deploy:
   - testnet: if the wallet has 0 XLM, fund it via Friendbot and poll.
   - mainnet: refuse to deploy unless the wallet holds >= 5 XLM (no Friendbot).
-  - deploy via the pinned stellar-cli 27.0.0 binary (ensure_stellar_cli()).
+  - deploy via pure-Python signed Soroban transactions (no stellar-cli / Rust).
   - write the resulting contract_id + wallet public key back to mycelium.toml.
 """
 
 import os
-import subprocess
 import sys
 import time
 
-from mycelium_compiler.codegen import ensure_stellar_cli
 from mycelium_sdk import crypto
 from mycelium_sdk.constants import (
     FRIENDBOT_URL,
     HORIZON_URLS,
     MAINNET_MIN_XLM,
-    NETWORK_PASSPHRASES,
-    SOROBAN_RPC_URLS,
     normalize_network,
 )
 
@@ -97,7 +93,7 @@ def run_deploy(
         print(f"Error: wallet {wallet_path} not found. Run `mycelium newwallet` first.")
         sys.exit(1)
 
-    secret, public_key = _load_secret(wallet_path, passphrase)
+    _, public_key = _load_secret(wallet_path, passphrase)
     print(f"[deploy] Deploying {wasm_path} to {network} as {public_key}...")
 
     balance = _native_balance(network, public_key)
@@ -113,20 +109,22 @@ def run_deploy(
             )
             sys.exit(1)
 
-    stellar_bin = ensure_stellar_cli()
-    cmd = [
-        stellar_bin, "contract", "deploy",
-        "--wasm", wasm_path,
-        "--source-account", secret,
-        "--rpc-url", SOROBAN_RPC_URLS[network],
-        "--network-passphrase", NETWORK_PASSPHRASES[network],
-    ]
-    res = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
-    if res.returncode != 0:
-        print(f"❌ Deployment failed:\n{res.stdout}\n{res.stderr}")
+    with open(wasm_path, "rb") as f:
+        wasm_bytes = f.read()
+
+    from mycelium_sdk.context import AgentContext
+
+    try:
+        ctx = AgentContext(
+            keypair_path=wallet_path,
+            network_type=network,
+            passphrase=passphrase,
+        )
+        contract_id = ctx.deploy_contract(wasm_bytes)
+    except Exception as e:  # noqa: BLE001 - surface a clean CLI error
+        print(f"❌ Deployment failed: {e}")
         sys.exit(1)
 
-    contract_id = res.stdout.strip().splitlines()[-1].strip()
     print(f"✓ Deployment successful! Contract ID: {contract_id}")
 
     if write_config:

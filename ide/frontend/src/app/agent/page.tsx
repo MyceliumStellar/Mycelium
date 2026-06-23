@@ -41,6 +41,15 @@ interface ResolvedAgent {
 const REGISTRY_ADDRESS = "CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC";
 const DEFAULT_NAMES = ["myc_6465185c", "myc2_dd9246f1"];
 
+// Backend API gateway (shared with the playground). Used by the agent-creation wizard.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Mirrors mycelium_sdk.scaffold.VALID_FRAMEWORKS / init.py.
+const VALID_FRAMEWORKS = ["langgraph", "gemini", "anthropic", "openai", "ollama", "custom"] as const;
+// Frameworks whose model list we can discover live (need an API key, except ollama).
+const DISCOVERY_FRAMEWORKS = ["gemini", "anthropic", "openai", "ollama"];
+const KEYLESS_DISCOVERY = ["ollama"];
+const UNIQUE_NAME_RE = /^[a-zA-Z0-9_]{3,30}$/;
+
 export default function AgentNetworkPage() {
   const [agents, setAgents] = useState<ResolvedAgent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<ResolvedAgent | null>(null);
@@ -49,6 +58,7 @@ export default function AgentNetworkPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isResolving, setIsResolving] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Central Registry Manager node details
   const registryNode: ResolvedAgent = {
@@ -469,6 +479,11 @@ export default function AgentNetworkPage() {
             <Link href="/agent"
               style={{ fontSize: "0.78rem", color: "#ffffff", fontWeight: 500 }}
             >agents</Link>
+            <Link href="/bounty"
+              style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", transition: "color 0.2s" }}
+              onMouseEnter={e => e.currentTarget.style.color = "#fff"}
+              onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.45)"}
+            >bounty</Link>
             <Link href="/docs"
               style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", display: "flex", alignItems: "center", gap: "4px" }}
               onMouseEnter={e => e.currentTarget.style.color = "#fff"}
@@ -573,7 +588,34 @@ export default function AgentNetworkPage() {
               {isResolving ? "Resolving..." : "Add"}
             </button>
           </form>
+
+          {/* Create a brand-new agent (in-IDE scaffolding wizard) */}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            style={{
+              background: "linear-gradient(135deg, rgba(139, 92, 246, 0.9), rgba(0, 242, 254, 0.9))",
+              border: "none",
+              borderRadius: "6px",
+              padding: "9px 18px",
+              color: "#000000",
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              whiteSpace: "nowrap"
+            }}
+          >
+            <Plus size={14} /> Create Agent
+          </button>
         </div>
+
+        <AnimatePresence>
+          {showCreateModal && (
+            <CreateAgentModal onClose={() => setShowCreateModal(false)} />
+          )}
+        </AnimatePresence>
 
         {/* Registry Address Card */}
         <div className="premium-card" style={{
@@ -1216,5 +1258,219 @@ export default function AgentNetworkPage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+// ── In-IDE Agent Creation wizard ─────────────────────────────────────────────
+// Mirrors `mycelium init`: collects project/unique name, provider, API key, and
+// model (discovered live via the backend /api/models proxy), then scaffolds a
+// new GitHub repo via /api/agents/scaffold and opens the playground in creation
+// mode. Requires a GitHub session (shared localStorage JWT with the playground).
+function CreateAgentModal({ onClose }: { onClose: () => void }) {
+  const [step, setStep] = useState(1);
+  const [projectName, setProjectName] = useState("");
+  const [framework, setFramework] = useState<string>("custom");
+  const [apiKey, setApiKey] = useState("");
+  const [models, setModels] = useState<string[]>([]);
+  const [model, setModel] = useState("");
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverError, setDiscoverError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const jwt = typeof window !== "undefined" ? localStorage.getItem("mycelium_jwt") : null;
+
+  const nameValid = UNIQUE_NAME_RE.test(projectName);
+  const canDiscover = DISCOVERY_FRAMEWORKS.includes(framework);
+  const needsKey = canDiscover && !KEYLESS_DISCOVERY.includes(framework);
+
+  const discoverModels = async () => {
+    setDiscovering(true);
+    setDiscoverError(null);
+    setModels([]);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/models`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({ framework, api_key: apiKey || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Model discovery failed");
+      setModels(data.models || []);
+      if ((data.models || []).length > 0) setModel(data.models[0]);
+    } catch (e: any) {
+      setDiscoverError(e.message || String(e));
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
+  const createAgent = async () => {
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/agents/scaffold`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+        body: JSON.stringify({
+          project_name: projectName,
+          framework,
+          model: model || "custom",
+          unique_name: projectName,
+          api_key: apiKey || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Scaffold failed");
+      // Open the playground in agent-creation mode for the new repo.
+      window.location.href = `/playground?repo=${encodeURIComponent(data.repo)}&mode=create`;
+    } catch (e: any) {
+      setCreateError(e.message || String(e));
+      setCreating(false);
+    }
+  };
+
+  const overlay: React.CSSProperties = {
+    position: "fixed", inset: 0, background: "rgba(4, 4, 5, 0.8)", backdropFilter: "blur(16px)",
+    display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px",
+  };
+  const card: React.CSSProperties = {
+    width: "100%", maxWidth: "520px", background: "rgba(10, 10, 12, 0.9)",
+    border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "12px", padding: "32px",
+    boxShadow: "0 20px 50px rgba(0, 0, 0, 0.8)", backdropFilter: "blur(20px)",
+  };
+  const label: React.CSSProperties = {
+    fontSize: "0.7rem", letterSpacing: "1px", color: "rgba(255,255,255,0.45)",
+    textTransform: "uppercase", marginBottom: "6px", display: "block", fontFamily: "var(--font-mono)", fontWeight: "bold",
+  };
+  const input: React.CSSProperties = {
+    width: "100%", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "6px", padding: "10px 14px", color: "#fff", fontSize: "0.9rem", outline: "none",
+    transition: "all 0.2s ease",
+  };
+  const primaryBtn: React.CSSProperties = {
+    background: "linear-gradient(135deg, rgba(139, 92, 246, 0.95), rgba(0, 242, 254, 0.95))",
+    border: "none", borderRadius: "6px", padding: "10px 20px", color: "#000", fontWeight: 700,
+    cursor: "pointer", fontSize: "0.85rem", transition: "all 0.2s ease",
+  };
+  const ghostBtn: React.CSSProperties = {
+    background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "6px", padding: "10px 20px", color: "#fff", cursor: "pointer", fontSize: "0.85rem",
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      style={overlay} onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }}
+        style={card} onClick={e => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+          <h2 style={{ fontSize: "1.2rem", fontWeight: 700, color: "#fff", margin: 0 }}>Create a new agent</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: "1.2rem" }}>✕</button>
+        </div>
+
+        {!jwt ? (
+          <div style={{ textAlign: "center", padding: "20px 0" }}>
+            <Shield size={32} color="var(--accent-cyan)" style={{ marginBottom: "12px" }} />
+            <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.9rem", marginBottom: "18px" }}>
+              Creating an agent scaffolds a private GitHub repo, so you need to sign in with GitHub first.
+            </p>
+            <Link href="/playground" style={{ ...primaryBtn, textDecoration: "none", display: "inline-block" }}>
+              Sign in via the Playground
+            </Link>
+          </div>
+        ) : (
+          <>
+            {/* Step indicator */}
+            <div style={{ display: "flex", gap: "6px", marginBottom: "22px" }}>
+              {[1, 2, 3].map(s => (
+                <div key={s} style={{ flex: 1, height: "3px", borderRadius: "2px", background: s <= step ? "var(--accent-cyan)" : "rgba(255,255,255,0.1)" }} />
+              ))}
+            </div>
+
+            {step === 1 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+                <div>
+                  <label style={label}>Agent / project name</label>
+                  <input style={input} placeholder="my_agent" value={projectName}
+                    onChange={e => setProjectName(e.target.value)} />
+                  {projectName && !nameValid && (
+                    <span style={{ color: "#f87171", fontSize: "0.72rem" }}>Must match ^[a-zA-Z0-9_]{"{3,30}"}$</span>
+                  )}
+                </div>
+                <div>
+                  <label style={label}>Provider / framework</label>
+                  <select style={input} value={framework} onChange={e => { setFramework(e.target.value); setModels([]); setModel(""); }}>
+                    {VALID_FRAMEWORKS.map(f => <option key={f} value={f} style={{ background: "#0b0b14" }}>{f}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                  <button style={ghostBtn} onClick={onClose}>Cancel</button>
+                  <button style={{ ...primaryBtn, opacity: nameValid ? 1 : 0.5 }} disabled={!nameValid} onClick={() => setStep(2)}>Next</button>
+                </div>
+              </div>
+            )}
+
+            {step === 2 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+                {needsKey && (
+                  <div>
+                    <label style={label}>{framework} API key</label>
+                    <input style={input} type="password" placeholder="sk-… (used only to list models; stored encrypted)"
+                      value={apiKey} onChange={e => setApiKey(e.target.value)} />
+                  </div>
+                )}
+                <div>
+                  <label style={label}>Model</label>
+                  {canDiscover ? (
+                    <>
+                      <button style={{ ...ghostBtn, marginBottom: "10px" }} disabled={discovering || (needsKey && !apiKey)} onClick={discoverModels}>
+                        {discovering ? "Discovering…" : "Discover models"}
+                      </button>
+                      {models.length > 0 && (
+                        <select style={input} value={model} onChange={e => setModel(e.target.value)}>
+                          {models.map(m => <option key={m} value={m} style={{ background: "#0b0b14" }}>{m}</option>)}
+                        </select>
+                      )}
+                      {discoverError && <span style={{ color: "#f87171", fontSize: "0.72rem" }}>{discoverError}</span>}
+                    </>
+                  ) : (
+                    <input style={input} placeholder="model id (optional)" value={model} onChange={e => setModel(e.target.value)} />
+                  )}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "10px" }}>
+                  <button style={ghostBtn} onClick={() => setStep(1)}>Back</button>
+                  <button style={primaryBtn} onClick={() => setStep(3)}>Next</button>
+                </div>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: "8px", padding: "16px", fontSize: "0.82rem", color: "rgba(255,255,255,0.8)", lineHeight: 1.7 }}>
+                  <div><span style={{ color: "rgba(255,255,255,0.45)" }}>Name:</span> {projectName}</div>
+                  <div><span style={{ color: "rgba(255,255,255,0.45)" }}>Provider:</span> {framework}</div>
+                  <div><span style={{ color: "rgba(255,255,255,0.45)" }}>Model:</span> {model || "(none)"}</div>
+                  <div><span style={{ color: "rgba(255,255,255,0.45)" }}>API key:</span> {apiKey ? "stored encrypted" : "none"}</div>
+                </div>
+                <p style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.45)", margin: 0 }}>
+                  A private GitHub repo will be created with the agent scaffold, then the playground opens in creation mode (Write → Compile → Deploy → Register).
+                </p>
+                {createError && <span style={{ color: "#f87171", fontSize: "0.78rem" }}>{createError}</span>}
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "10px" }}>
+                  <button style={ghostBtn} onClick={() => setStep(2)} disabled={creating}>Back</button>
+                  <button style={{ ...primaryBtn, opacity: creating ? 0.6 : 1 }} onClick={createAgent} disabled={creating}>
+                    {creating ? "Creating…" : "Create agent"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </motion.div>
+    </motion.div>
   );
 }

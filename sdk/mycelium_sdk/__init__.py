@@ -1,6 +1,9 @@
+__version__ = "0.2.0"
+
 from mycelium_sdk.context import AgentContext, StellarNetwork, TxResult
 from mycelium_sdk.hive import HiveClient
 from mycelium_sdk.x402.settlement import EscrowPaymentRouter, EscrowPaymentManager
+from mycelium_sdk.jobs import JobBoardClient
 from mycelium_sdk.constants import HIVEMIND_REGISTRY_ADDRESS
 from mycelium_sdk.banner import print_banner, show_startup_banner
 from mycelium_sdk.agent_loop import run_agent_loop, ContractTool
@@ -12,12 +15,14 @@ from mycelium_sdk.scval import (
 )
 
 __all__ = [
+    "__version__",
     "AgentContext",
     "StellarNetwork",
     "TxResult",
     "HiveClient",
     "EscrowPaymentRouter",
     "EscrowPaymentManager",
+    "JobBoardClient",
     "HIVEMIND_REGISTRY_ADDRESS",
     "print_banner",
     "show_startup_banner",

@@ -36,6 +36,16 @@ NETWORK_PASSPHRASES = {
 # Friendbot funds brand-new testnet accounts with lumens (testnet only).
 FRIENDBOT_URL = "https://friendbot.stellar.org"
 
+# ─── Hosted compile service ──────────────────────────────────────────────────
+# `mycelium compile` POSTs source here when no local Rust/stellar-cli toolchain
+# is present, so a new user can compile to WASM with zero local install. Points
+# at the live IDE backend's `/compile` endpoint (runs the compiler in Docker).
+# Self-hosters override via the MYCELIUM_COMPILE_URL env var.
+import os as _os
+
+DEFAULT_COMPILE_URL = "https://mycelium-zgez.onrender.com/compile"
+COMPILE_URL = _os.environ.get("MYCELIUM_COMPILE_URL", DEFAULT_COMPILE_URL)
+
 # Minimum balance (XLM) required to attempt a mainnet deployment, per sdk.md.
 MAINNET_MIN_XLM = 5.0
 

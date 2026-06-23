@@ -335,6 +335,11 @@ contract failed, so it can gate CI. **Reference baseline in-image: 132/300**
 
 ## 💻 Running the Compiler Locally (without Docker)
 
+> **Note** — Running the compiler locally is **optional**. `mycelium compile`
+> defaults to the hosted `/compile` backend (Docker), so a new user needs no
+> local Rust/stellar-cli toolchain at all. The local path below is for
+> contributors and `mycelium compile --local`.
+
 The compiler is pure-Python (stdlib only). It needs a `stellar` binary on
 `PATH`; if absent, `ensure_stellar_cli()` auto-downloads the pinned v27.0.0 for
 your OS/arch into `codegen/bin/` (Linux x86_64, macOS x86_64/arm64, Windows

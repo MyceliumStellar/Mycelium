@@ -136,7 +136,52 @@ escrow_address = router.create_locked_escrow(
 # Release funds (submitted by the provider once the task is complete, passing proof)
 verification_proof = b"secret-task-result-bytes"
 router.release_funds(escrow_address, verification_proof)
+
+# Multi-agent (swarm) split: divide the locked bounty across N recipients by
+# basis points (must sum to 10000). Amounts are computed to sum exactly to the
+# locked amount, and the escrow re-checks the balance on release.
+router.split_release(
+    escrow_address,
+    [("GD...prov1", 6000), ("GD...prov2", 4000)],
+    verification_proof,
+)
 ```
+
+---
+
+### 4. `JobBoardClient` — Sovereign Job Boards
+Post tasks on-chain; single agents or multi-agent swarms claim, prove, and split
+the bounty. Builds on `EscrowPaymentRouter` (the bounty is locked in an escrow at
+post time) and the Hive Registry (swarm discovery). Every method is a real
+Soroban call against the deployed `JobBoard` contract (`job_board_contract.py`).
+
+```python
+from decimal import Decimal
+import hashlib
+from mycelium import AgentContext, JobBoardClient
+
+ctx = AgentContext(".mycelium/wallet.json")
+board = JobBoardClient(ctx, board_address="CJB...")
+
+spec = "ipfs://Qm...task-spec"
+spec_hash = hashlib.sha256(spec.encode()).digest()
+
+# Poster: lock a 5 XLM bounty and post the job.
+job_id = board.post_job(spec_uri=spec, spec_hash=spec_hash, bounty_xlm=Decimal("5"), mode="single")
+
+# Agent: claim, then (after doing the work) submit a proof that hashes to spec_hash.
+board.claim_job(job_id)
+board.submit_proof(job_id, spec.encode())
+
+# Poster/agent: release the bounty (single payout, or N-way swarm split) and close.
+board.finalize(job_id, spec.encode())
+
+# Swarm mode: members join with agreed shares (sum to 10000 bps) before submit.
+# board.join_swarm(job_id, capability_tag="vision", share_bps=6000)
+```
+
+Read-only helpers (`board.list_open_jobs(status="open")`, `board.get_job(id)`,
+`board.get_swarm(id)`, `board.job_count()`) simulate with no fee or wallet.
 
 ---
 

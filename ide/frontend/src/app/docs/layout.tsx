@@ -78,6 +78,7 @@ const NAV = [
       { id: "arch-compiler",     label: "Compiler Pipeline" },
     ],
   },
+  { id: "changelog",           label: "Changelog",              icon: <Terminal size={14} /> },
 ] as const;
 
 type NavItem = { id: string; label: string; parentId?: string };
@@ -268,6 +269,11 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
               onMouseEnter={e => e.currentTarget.style.color = "#fff"}
               onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.45)"}
             >agents</Link>
+            <Link href="/bounty"
+              style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", transition: "color 0.2s" }}
+              onMouseEnter={e => e.currentTarget.style.color = "#fff"}
+              onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.45)"}
+            >bounty</Link>
             <Link href="/docs"
               style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", display: "flex", alignItems: "center", gap: "4px" }}
               onMouseEnter={e => e.currentTarget.style.color = "#fff"}
@@ -332,7 +338,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
               background: "rgba(139,92,246,0.12)", color: "var(--accent-purple)",
               border: "1px solid rgba(139,92,246,0.25)",
               fontFamily: "var(--font-mono)", letterSpacing: "0.4px",
-            }}>v0.1.0</span>
+            }}>v0.2.0</span>
           </div>
 
           {/* Search */}

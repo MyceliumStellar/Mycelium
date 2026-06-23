@@ -1,0 +1,9 @@
+[project]
+name = "mycelium_jobs_demo"
+version = "0.1.0"
+
+[onchain]
+network = "testnet"
+
+[jobs]
+board_address = "CDUQEYFC53GQRIVN6F4UAARZN6VN7INJGSEDN3GHNETCNVDJPSBTW7E5"

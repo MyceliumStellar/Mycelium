@@ -7,12 +7,12 @@ Both halves are real on-chain operations routed through `AgentContext`:
     and locks the payment by invoking `initialize`.
   - `release_funds` invokes `claim_funds(proof)` on an existing escrow.
 
-No mocks: deployment uses the same stellar-cli flow as `mycelium deploy`, and
-the lock/claim are signed Soroban transactions.
+No mocks: deployment uses the same pure-Python signed-transaction flow as
+`mycelium deploy` (`AgentContext.deploy_contract`), and the lock/claim are
+signed Soroban transactions.
 """
 
 import os
-import subprocess
 from decimal import Decimal
 
 # 1 XLM = 10,000,000 stroops; Soroban token amounts are integer stroops (i128).
@@ -84,6 +84,57 @@ class EscrowPaymentRouter:
             args=[verification_proof],
         )
 
+    def split_release(self, escrow_contract_id: str, shares, verification_proof: bytes):
+        """
+        Release locked escrow funds across N recipients (a swarm), splitting the
+        locked amount by `shares`. `shares` is a list of `(recipient_address,
+        share_bps)` whose basis points must sum to 10000. Invokes
+        `claim_and_split(proof, recipients, amounts)` on the escrow — the `proof`
+        must SHA-256 to the task hash. Returns the TxResult.
+
+        The exact stroop amounts are computed here so they sum to the locked
+        amount with no rounding dust (the remainder lands on the last recipient);
+        the escrow re-checks that the amounts balance before paying out.
+        """
+        if not shares:
+            raise ValueError("split_release requires at least one (recipient, share_bps).")
+        total_bps = sum(int(bps) for _, bps in shares)
+        if total_bps != 10000:
+            raise ValueError(
+                f"Swarm shares must sum to 10000 basis points (got {total_bps})."
+            )
+
+        # Read the locked amount from the escrow so the split is exact.
+        details = self.context.call_contract(
+            contract_id=escrow_contract_id,
+            function_name="get_details",
+            args=[],
+            read_only=True,
+        )
+        amount = int(details["amount"] if isinstance(details, dict) else details[1])
+
+        recipients = []
+        amounts = []
+        running = 0
+        for i, (recipient, bps) in enumerate(shares):
+            recipients.append(recipient)
+            if i < len(shares) - 1:
+                pay = amount * int(bps) // 10000
+                running += pay
+            else:
+                pay = amount - running  # remainder absorbs rounding dust
+            amounts.append(pay)
+
+        print(
+            f"[x402] Splitting {amount} stroops across {len(recipients)} recipients "
+            f"({total_bps} bps)..."
+        )
+        return self.context.call_contract(
+            contract_id=escrow_contract_id,
+            function_name="claim_and_split",
+            args=[verification_proof, recipients, amounts],
+        )
+
     def refund(self, escrow_contract_id: str):
         """Reclaim locked funds after the escrow deadline. Returns the TxResult."""
         print("[x402] Requesting refund of expired escrow...")
@@ -97,25 +148,11 @@ class EscrowPaymentRouter:
     def _deploy_escrow_instance(self) -> str:
         """
         Upload + instantiate the bundled escrow WASM, returning its contract id.
-        Mirrors `mycelium deploy` (shells out to the pinned stellar-cli).
+        Pure-Python via `AgentContext.deploy_contract` (no stellar-cli / Rust).
         """
-        from mycelium_compiler.codegen import ensure_stellar_cli
-        from mycelium_sdk.constants import NETWORK_PASSPHRASES, SOROBAN_RPC_URLS
-
-        network = self.context.network_type
-        cmd = [
-            ensure_stellar_cli(), "contract", "deploy",
-            "--wasm", _ESCROW_WASM,
-            "--source-account", self.context.keypair.secret,
-            "--rpc-url", SOROBAN_RPC_URLS[network],
-            "--network-passphrase", NETWORK_PASSPHRASES[network],
-        ]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        if res.returncode != 0:
-            raise RuntimeError(
-                f"Escrow deployment failed:\n{res.stdout}\n{res.stderr}"
-            )
-        return res.stdout.strip().splitlines()[-1].strip()
+        with open(_ESCROW_WASM, "rb") as f:
+            escrow_wasm_bytes = f.read()
+        return self.context.deploy_contract(escrow_wasm_bytes)
 
 
 # ── Back-compat aliases (previous class/method names) ────────────────────────

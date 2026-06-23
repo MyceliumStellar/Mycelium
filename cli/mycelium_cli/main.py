@@ -22,14 +22,36 @@ from mycelium_cli.commands.doctor import run_doctor
 from mycelium_cli.commands.events import run_events
 from mycelium_cli.commands.run import run_run
 from mycelium_cli.commands.test import run_test
+from mycelium_cli.commands.jobs import job_app
+from mycelium_cli.commands.deal import deal_app
 
 app = typer.Typer(help="Mycelium Developer Framework CLI")
+# Sovereign Job Boards: `mycelium job post|list|claim|assign|join|submit|finalize|status`
+app.add_typer(job_app, name="job")
+# A2A commerce (conditional x402 escrow between two agents):
+# `mycelium deal open|release|refund|status`
+app.add_typer(deal_app, name="deal")
 
 PASSPHRASE_ENV_VAR = "MYCELIUM_DECRYPT_KEY"
 
 
+__version__ = "0.2.0"
+
+
+def _version_callback(value: bool):
+    if value:
+        typer.echo(f"mycelium {__version__}")
+        raise typer.Exit()
+
+
 @app.callback(invoke_without_command=True)
-def _root(ctx: typer.Context):
+def _root(
+    ctx: typer.Context,
+    version: bool = typer.Option(
+        False, "--version", "-V", help="Show the Mycelium version and exit.",
+        callback=_version_callback, is_eager=True,
+    ),
+):
     """Mycelium Developer Framework CLI."""
     show_startup_banner()
     if ctx.invoked_subcommand is None:
@@ -137,9 +159,15 @@ def compile(
     file: str = typer.Argument(None, help="Contract file (defaults to mycelium.toml)"),
     output: str = typer.Option(None, "-o", "--output", help="Output WASM path"),
     optimize: bool = typer.Option(False, "--optimize", help="Size-optimize the WASM"),
+    remote: bool = typer.Option(False, "--remote", help="Compile via the hosted backend (no local toolchain needed)"),
+    local: bool = typer.Option(False, "--local", help="Force the local Rust/stellar-cli toolchain"),
 ):
-    """Compile a Python contract to Soroban WASM."""
-    run_compile(file, output, optimize=optimize)
+    """Compile a Python contract to Soroban WASM.
+
+    By default compiles locally if a Rust + stellar-cli toolchain is detected,
+    otherwise compiles remotely via the hosted backend (zero local install).
+    """
+    run_compile(file, output, optimize=optimize, remote=remote or None, local=local)
 
 
 @app.command()
@@ -257,7 +285,7 @@ def pay(
 def doctor(
     network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
 ):
-    """Verify the toolchain (stellar-cli, rust+wasm, RPC) and print fixes."""
+    """Verify connectivity (hosted compile + RPC; local toolchain optional) and print fixes."""
     run_doctor(network=network)
 
 

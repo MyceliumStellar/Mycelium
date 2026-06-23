@@ -140,13 +140,18 @@ mycelium check contract.py
 ```
 
 ### `mycelium compile`
-Compiles the Python DSL smart contract to optimized WASM bytecode.
+Compiles the Python DSL smart contract to optimized WASM bytecode. **Zero-toolchain
+by default**: with no local Rust/stellar-cli installed, the source is compiled
+remotely via the hosted backend; a local toolchain (if present) is used
+automatically. Force either path with `--remote` / `--local`.
 ```bash
 mycelium compile --optimize
 ```
 
 ### `mycelium deploy`
 Deploys the compiled WASM binary to the ledger and updates `mycelium.toml` with the `contract_id`.
+Deployment is **pure-Python** (signed Soroban transactions via `stellar_sdk`) — no
+`stellar-cli` / Rust dependency and nothing is downloaded onto your machine.
 ```bash
 mycelium deploy --network testnet
 ```

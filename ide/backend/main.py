@@ -64,6 +64,19 @@ class FileCommitRequest(BaseModel):
     content: str
     sha: Optional[str] = None
 
+class ModelsRequest(BaseModel):
+    framework: str
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+
+class ScaffoldRequest(BaseModel):
+    project_name: str
+    framework: str = "custom"
+    model: str = "custom"
+    unique_name: Optional[str] = None
+    api_key: Optional[str] = None
+    wallet_passphrase: Optional[str] = None
+
 # Dependency to authenticate requests via JWT and load the user's decrypted GitHub token
 def get_current_user_session(authorization: str = Header(None), db = Depends(get_db)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -358,6 +371,121 @@ def commit_repo_file(repo_name: str, file_req: FileCommitRequest, session = Depe
         "message": "File committed successfully to GitHub repository"
     }
 
+# ── In-IDE Agent Creation ────────────────────────────────────────────────────
+
+def _gh_create_repo(github_token: str, name: str) -> dict:
+    """Create a private, auto-initialized GitHub repo. Mirrors create_repository."""
+    res = requests.post(
+        "https://api.github.com/user/repos",
+        json={"name": name, "private": True, "auto_init": True,
+              "description": "Scaffolded by Mycelium Web IDE"},
+        headers={"Authorization": f"token {github_token}",
+                 "Accept": "application/vnd.github.v3+json"},
+    )
+    if res.status_code != 201:
+        raise HTTPException(status_code=res.status_code,
+                            detail=res.json().get("message", "Failed to create repository"))
+    return res.json()
+
+
+def _gh_commit_file(github_token: str, username: str, repo: str, filename: str, content: str) -> None:
+    """Create-or-update a file in `repo`. Mirrors commit_repo_file (fetches sha if present)."""
+    url = f"https://api.github.com/repos/{username}/{repo}/contents/{filename}"
+    headers = {"Authorization": f"token {github_token}", "Accept": "application/vnd.github.v3+json"}
+    payload = {
+        "message": f"Scaffold {filename} via Mycelium IDE",
+        "content": base64.b64encode(content.encode("utf-8")).decode("utf-8"),
+    }
+    # auto_init created README.md, so it already has a sha — fetch it to update in place.
+    existing = requests.get(url, headers=headers)
+    if existing.status_code == 200:
+        payload["sha"] = existing.json().get("sha")
+    res = requests.put(url, json=payload, headers=headers)
+    if res.status_code not in (200, 201):
+        raise HTTPException(status_code=res.status_code,
+                            detail=res.json().get("message", f"Failed to commit {filename}"))
+
+
+@app.post("/api/models")
+def list_models_endpoint(req: ModelsRequest, session = Depends(get_current_user_session)):
+    """
+    Proxy live model discovery for a provider so the API key never round-trips
+    through the browser / hits CORS. Mirrors the CLI's `_select_model`.
+    """
+    from mycelium_sdk import models as model_discovery
+
+    if not model_discovery.supports_discovery(req.framework):
+        return {"framework": req.framework, "models": [], "supports_discovery": False}
+    try:
+        models = model_discovery.list_models(req.framework, api_key=req.api_key, base_url=req.base_url)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"framework": req.framework, "models": models, "supports_discovery": True}
+
+
+@app.post("/api/agents/scaffold")
+def scaffold_agent(req: ScaffoldRequest, session = Depends(get_current_user_session), db = Depends(get_db)):
+    """
+    Create a new private GitHub repo and commit a full Mycelium agent scaffold
+    (mycelium.toml, agent.py, contract.py, .gitignore, README.md) using the
+    shared `mycelium_sdk.scaffold` templates. The provider API key is stored
+    encrypted server-side (never committed). Optionally generates an encrypted
+    wallet (passphrase never stored).
+    """
+    from mycelium_sdk import scaffold as sc
+
+    unique_name = req.unique_name or req.project_name
+    if not sc.validate_unique_name(unique_name):
+        raise HTTPException(status_code=400, detail="unique_name must match ^[a-zA-Z0-9_]{3,30}$")
+    if req.framework not in sc.VALID_FRAMEWORKS:
+        raise HTTPException(status_code=400, detail=f"framework must be one of {sc.VALID_FRAMEWORKS}")
+
+    github_token = session["github_token"]
+    username = session["user"].github_username
+
+    # 1. Create the repo (auto-initialized with main branch).
+    _gh_create_repo(github_token, req.project_name)
+
+    # 2. Commit the scaffold (shared templates — never drifts from `mycelium init`).
+    files = {
+        "mycelium.toml": sc.config_to_toml(sc.build_config(req.project_name, req.framework, req.model, unique_name)),
+        "contract.py": sc.CONTRACT_TEMPLATE,
+        "agent.py": sc.agent_template(req.framework, req.model, unique_name),
+        ".gitignore": sc.GITIGNORE,
+        "README.md": sc.readme_template(req.project_name, req.framework, req.model, unique_name),
+    }
+    for filename, content in files.items():
+        _gh_commit_file(github_token, username, req.project_name, filename, content)
+
+    # 3. Store the provider API key encrypted server-side (NOT in the repo).
+    if req.api_key:
+        enc = encrypt_token(req.api_key)
+        db.reference("user_credentials").child(session["user"].id).child("agent_api_keys").child(req.project_name).set({
+            "framework": req.framework,
+            "encrypted_api_key": enc,
+            "updated_at": datetime.datetime.utcnow().isoformat(),
+        })
+
+    # 4. Optionally generate an encrypted wallet (passphrase never stored).
+    wallet_public_key = None
+    encrypted_wallet = None
+    if req.wallet_passphrase:
+        from stellar_sdk import Keypair
+        from mycelium_sdk import crypto
+        kp = Keypair.random()
+        wallet_public_key = kp.public_key
+        encrypted_wallet = {"public_key": kp.public_key, **crypto.encrypt_secret(kp.secret, req.wallet_passphrase)}
+
+    return {
+        "success": True,
+        "repo": req.project_name,
+        "files": list(files.keys()),
+        "unique_name": unique_name,
+        "wallet_public_key": wallet_public_key,
+        "encrypted_wallet": encrypted_wallet,
+        "api_key_stored": bool(req.api_key),
+    }
+
 # Compilation Endpoint (Stateless)
 @app.post("/compile", response_model=CompileResponse)
 async def compile_endpoint(req: CompileRequest):
@@ -381,76 +509,62 @@ class DeployRequest(BaseModel):
 
 @app.post("/api/deploy")
 def deploy_contract_endpoint(req: DeployRequest):
-    import tempfile
+    """
+    Deploy a contract WASM via pure-Python signed Soroban transactions
+    (upload WASM hash → create contract). No stellar-cli / Rust dependency.
+    """
     import base64
-    from mycelium_compiler.codegen import ensure_stellar_cli
-    
+    from stellar_sdk import Keypair, SorobanServer, Network
+    from mycelium_sdk.context import deploy_contract as deploy_contract_bytes
+
     # 1. Decode WASM base64
     try:
         wasm_bytes = base64.b64decode(req.wasm_base64)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid base64 encoding: {e}")
-        
+
     # 2. Setup Network and RPC parameters
     is_testnet = req.network == "testnet"
     if is_testnet:
         rpc_url = "https://soroban-testnet.stellar.org"
-        network_passphrase = "Test SDF Network ; September 2015"
+        network_passphrase = Network.TESTNET_NETWORK_PASSPHRASE
     else:
         rpc_url = "https://mainnet.sorobanrpc.com"
-        network_passphrase = "Public Global Stellar Network ; September 2015"
-        
+        network_passphrase = Network.PUBLIC_NETWORK_PASSPHRASE
+
     # 3. Resolve Secret Key (Generate and Friendbot-fund if missing on Testnet)
     secret_key = req.secret_key
     address = None
     generated = False
-    
+
     if not secret_key:
         if not is_testnet:
             raise HTTPException(status_code=400, detail="Secret key is required for mainnet deployment")
         try:
-            from stellar_sdk import Keypair
             kp = Keypair.random()
             secret_key = kp.secret
             address = kp.public_key
             generated = True
-            
+
             # Fund via Friendbot
             friendbot_res = requests.get(f"https://friendbot.stellar.org/?addr={address}", timeout=15)
             if not friendbot_res.ok:
                 raise RuntimeError("Friendbot response was not OK")
-            
+
             # Wait for ledger commitment (Friendbot transactions take ~3-4 seconds to clear)
             import time
             time.sleep(4)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to generate and fund temporary account: {e}")
-            
-    # 4. Save WASM bytes to a temp file
-    with tempfile.NamedTemporaryFile(suffix=".wasm", delete=False) as tmp:
-        tmp.write(wasm_bytes)
-        wasm_path = tmp.name
-        
+
+    # 4. Deploy via pure-Python signed transactions
     try:
-        # Resolve stellar CLI binary path (utilizes the auto-bootstrapper!)
-        stellar_bin = ensure_stellar_cli()
-        
-        cmd = [
-            stellar_bin, "contract", "deploy",
-            "--wasm", wasm_path,
-            "--source-account", secret_key,
-            "--rpc-url", rpc_url,
-            "--network-passphrase", network_passphrase
-        ]
-        
-        # Run deployment with 45-second timeout (transaction simulation/submission can take a few seconds)
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
-        
-        if res.returncode != 0:
-            raise RuntimeError(f"Stellar CLI deploy failed:\nStdout: {res.stdout}\nStderr: {res.stderr}")
-            
-        contract_id = res.stdout.strip()
-        
+        keypair = Keypair.from_secret(secret_key)
+        soroban_rpc = SorobanServer(rpc_url)
+        contract_id = deploy_contract_bytes(
+            soroban_rpc, keypair, network_passphrase, wasm_bytes
+        )
+
         response = {
             "success": True,
             "contract_id": contract_id,
@@ -459,11 +573,8 @@ def deploy_contract_endpoint(req: DeployRequest):
         if generated:
             response["generated_address"] = address
             response["generated_secret"] = secret_key
-            
+
         return response
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if os.path.exists(wasm_path):
-            os.remove(wasm_path)

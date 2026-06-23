@@ -1,14 +1,17 @@
 """
-`mycelium doctor` — verify the local toolchain and print fixes.
+`mycelium doctor` — verify connectivity and print fixes.
 
-Checks the things that silently break a compile/deploy:
-  - stellar-cli present and at the version Mycelium pins (we hit a 25-vs-27
-    mismatch in the field),
-  - a Rust toolchain with the wasm32 target installed,
+Mycelium's default happy path is **zero-toolchain**: compile runs on the hosted
+backend and deploy is pure-Python signed transactions, so neither Rust nor
+stellar-cli is required. doctor's hard checks reflect that:
+  - the hosted compile endpoint is reachable,
   - the Soroban RPC for the configured network is reachable.
 
+stellar-cli and a local Rust/wasm32 toolchain are reported as **optional**
+"local compile" capabilities — their absence is informational, never a failure.
+
 Each failed check prints the exact command that fixes it. Exit code is non-zero
-if anything is wrong, so it can gate CI.
+only if a *required* check fails, so it can gate CI.
 """
 
 import re
@@ -17,7 +20,7 @@ import subprocess
 import sys
 from typing import Optional
 
-from mycelium_sdk.constants import SOROBAN_RPC_URLS, normalize_network
+from mycelium_sdk.constants import COMPILE_URL, SOROBAN_RPC_URLS, normalize_network
 
 from mycelium_cli.config import get_value
 
@@ -41,40 +44,58 @@ def _run(cmd: list[str]) -> Optional[str]:
     return (res.stdout or res.stderr).strip()
 
 
-def _check_stellar_cli() -> bool:
+def _check_stellar_cli() -> None:
+    """Optional: report local stellar-cli (only needed for `compile --local`)."""
     binary = shutil.which("stellar")
     if not binary:
-        print(f"  {_NO} stellar-cli   not found on PATH")
-        print(f"       fix: cargo install --locked stellar-cli@{PINNED_STELLAR_VERSION}")
-        return False
+        print(f"  {_WARN} stellar-cli   not installed (optional — only for `compile --local`)")
+        print(f"       install: cargo install --locked stellar-cli@{PINNED_STELLAR_VERSION}")
+        return
     out = _run(["stellar", "--version"]) or ""
     m = re.search(r"(\d+)\.(\d+)\.(\d+)", out)
     version = m.group(0) if m else "unknown"
     major = int(m.group(1)) if m else 0
     pinned_major = int(PINNED_STELLAR_VERSION.split(".")[0])
     if major == pinned_major:
-        print(f"  {_OK} stellar-cli   {version} ({binary})")
-        return True
-    print(f"  {_WARN} stellar-cli   {version} — Mycelium pins v{PINNED_STELLAR_VERSION}")
-    print(f"       fix: cargo install --locked stellar-cli@{PINNED_STELLAR_VERSION}")
-    return False
+        print(f"  {_OK} stellar-cli   {version} ({binary}) — local compile available")
+    else:
+        print(f"  {_WARN} stellar-cli   {version} — Mycelium pins v{PINNED_STELLAR_VERSION} for local compile")
+        print(f"       fix: cargo install --locked stellar-cli@{PINNED_STELLAR_VERSION}")
 
 
-def _check_rust() -> bool:
+def _check_rust() -> None:
+    """Optional: report local Rust + wasm32 target (only for `compile --local`)."""
     rustc = _run(["rustc", "--version"])
     if not rustc:
-        print(f"  {_NO} rust          rustc not found")
-        print("       fix: curl https://sh.rustup.rs -sSf | sh")
-        return False
+        print(f"  {_WARN} rust          not installed (optional — only for `compile --local`)")
+        print("       install: curl https://sh.rustup.rs -sSf | sh")
+        return
     print(f"  {_OK} rust          {rustc}")
 
     installed = _run(["rustup", "target", "list", "--installed"]) or ""
     if WASM_TARGET in installed:
-        print(f"  {_OK} wasm target   {WASM_TARGET} installed")
+        print(f"  {_OK} wasm target   {WASM_TARGET} installed — local compile available")
+    else:
+        print(f"  {_WARN} wasm target   {WASM_TARGET} missing (optional)")
+        print(f"       fix: rustup target add {WASM_TARGET}")
+
+
+def _check_compile_endpoint() -> bool:
+    """Required: the hosted compile endpoint must be reachable (default path)."""
+    import requests
+
+    # GET the backend root — the /compile route only accepts POST, but a
+    # reachable host returning any HTTP response proves connectivity.
+    base = COMPILE_URL.rsplit("/compile", 1)[0] or COMPILE_URL
+    try:
+        requests.get(base, timeout=15)
+        print(f"  {_OK} compile       hosted endpoint reachable ({COMPILE_URL})")
         return True
-    print(f"  {_NO} wasm target   {WASM_TARGET} missing")
-    print(f"       fix: rustup target add {WASM_TARGET}")
-    return False
+    except Exception as e:
+        print(f"  {_NO} compile       hosted endpoint unreachable: {e}")
+        print(f"       fix: check connectivity to {COMPILE_URL}, set MYCELIUM_COMPILE_URL, "
+              f"or install a local toolchain and use `compile --local`")
+        return False
 
 
 def _check_rpc(network: str) -> bool:
@@ -93,14 +114,19 @@ def _check_rpc(network: str) -> bool:
 
 def run_doctor(network: Optional[str] = None) -> bool:
     network = normalize_network(network or get_value("onchain", "network", "testnet"))
-    print("\nMycelium doctor — toolchain check\n")
-    results = [
-        _check_stellar_cli(),
-        _check_rust(),
+    print("\nMycelium doctor — connectivity check\n")
+
+    # Required checks gate the exit code; optional ones are informational only.
+    required = [
+        _check_compile_endpoint(),
         _check_rpc(network),
     ]
-    ok = all(results)
-    print(f"\n{'✓ All checks passed.' if ok else '✗ Some checks failed — see fixes above.'}\n")
+    print("\n  optional — local compile (not needed for the default workflow):")
+    _check_stellar_cli()
+    _check_rust()
+
+    ok = all(required)
+    print(f"\n{'✓ All required checks passed.' if ok else '✗ Some required checks failed — see fixes above.'}\n")
     if not ok:
         sys.exit(1)
     return ok

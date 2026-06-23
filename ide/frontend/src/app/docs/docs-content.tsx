@@ -1502,6 +1502,54 @@ capabilities          = ["price-feed", "usd-xlm"]`}
           </>
         );
 
+      case "changelog":
+        return (
+          <>
+            <SectionH1>Changelog & Release Notes</SectionH1>
+            <P>
+              All notable changes to the Mycelium framework (SDK, CLI, compiler, and Web IDE) are documented here.
+            </P>
+
+            <SectionH2 id="v020">Version 0.2.0 — The Sovereign Job Boards Release</SectionH2>
+            <P><strong>Released on 2026-06-23</strong></P>
+            <P>
+              End-to-end on-chain execution of Sovereign Job Boards on Stellar Testnet. This release introduces support for single-agent and multi-agent swarm coordination, bounty escrow settlements, and direct agent-to-agent (A2A) conditional deals.
+            </P>
+
+            <SectionH3>Bug Fixes & System Stability</SectionH3>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>Escrow <InlineCode>initialize</InlineCode> On-Chain Trap Fixed:</strong> Resolved the compilation codegen issue in the Python-to-WASM transpiler where the SHA-256 validation comparison <InlineCode>env.crypto().sha256(...) != Bytes</InlineCode> emitted an implicit cast producing a trapping <InlineCode>Hash&lt;N&gt;</InlineCode> type. Codegen now explicitly compiles to <InlineCode>soroban_sdk::Bytes::from(...)</InlineCode>. The recompiled <InlineCode>escrow.wasm</InlineCode> (4852 bytes) is fully tested and verified non-trapping.</li>
+              <li><strong>Swarm Split Release Settle:</strong> Verified N-way split release payouts in the escrow contract on testnet. A 60/40 swarm split releases funds correctly across members, absorbing rounding dust.</li>
+              <li><strong>Dependency Upgrades:</strong> Updated the Stellar SDK target installation advice in <InlineCode>AgentContext</InlineCode> warnings from <InlineCode>&gt;=12,&lt;13</InlineCode> to <InlineCode>&gt;=14,&lt;15</InlineCode>.</li>
+            </ul>
+
+            <SectionH3>New Features & CLI Additions</SectionH3>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>A2A Conditional Commerce (<InlineCode>mycelium deal</InlineCode>):</strong> A new CLI command group that allows setting up conditional deals between two agents directly from the command line:
+                <ul style={{ paddingLeft: 20, marginTop: 8 }}>
+                  <li><InlineCode>mycelium deal open</InlineCode> — Locks payment in a conditional escrow.</li>
+                  <li><InlineCode>mycelium deal release</InlineCode> — Releases escrow funds to the provider upon proof submission.</li>
+                  <li><InlineCode>mycelium deal refund</InlineCode> — Reclaims payer funds if the deadline expires.</li>
+                  <li><InlineCode>mycelium deal status</InlineCode> — Inspects the escrow deal state.</li>
+                </ul>
+              </li>
+              <li><strong>Version Flag:</strong> Added support for checking the CLI version via <InlineCode>mycelium --version</InlineCode> or <InlineCode>-V</InlineCode>, and programmatically via <InlineCode>mycelium_sdk.__version__</InlineCode>.</li>
+            </ul>
+
+            <SectionH2 id="v010">Version 0.1.0 — Initial Release</SectionH2>
+            <P><strong>Released on 2026-06-15</strong></P>
+            <P>
+              The initial release of the Mycelium framework, including:
+            </P>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>DSL Compiler:</strong> Python AST-to-Soroban-WASM transpiler. Compiles classes decorated with <InlineCode>@contract</InlineCode> to WASM.</li>
+              <li><strong>SDK:</strong> <InlineCode>AgentContext</InlineCode> with secure AES-256-GCM wallet encryption, <InlineCode>HiveClient</InlineCode> for agent discovery, and <InlineCode>JobBoardClient</InlineCode> for bounty boards.</li>
+              <li><strong>CLI Tooling:</strong> Commands for wallet creation, contract compiling, contract deployment, registry queries, and agent runs.</li>
+              <li><strong>Web IDE:</strong> Sandbox compiler environment and Freeway/Freighter wallet integration with code playground.</li>
+            </ul>
+          </>
+        );
+
       default:
         return (
           <>
@@ -1539,6 +1587,7 @@ capabilities          = ["price-feed", "usd-xlm"]`}
               { id: "sdk", label: "SDK Reference" },
               { id: "cli", label: "CLI Reference" },
               { id: "architecture", label: "Architecture" },
+              { id: "changelog", label: "Changelog" },
             ];
 
             const currentIndex = PAGES.findIndex(p => p.id === slug);
@@ -1650,7 +1699,7 @@ capabilities          = ["price-feed", "usd-xlm"]`}
             flexWrap: "wrap", gap: 12,
           }}>
             <span style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.25)", fontFamily: "var(--font-sans)" }}>
-              Mycelium v0.1.0-alpha · Stellar Testnet
+              Mycelium v0.2.0 · Stellar Testnet
             </span>
             <div style={{ display: "flex", gap: 20 }}>
               <Link href="/playground" style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.35)", textDecoration: "none" }}>Playground</Link>

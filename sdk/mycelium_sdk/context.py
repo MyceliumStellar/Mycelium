@@ -68,7 +68,7 @@ def _require_stellar_sdk():
     except ImportError as exc:  # pragma: no cover - environment dependent
         raise ImportError(
             "AgentContext requires the Stellar SDK. Install it with:\n"
-            "    pip install 'stellar-sdk>=12,<13'"
+            "    pip install 'stellar-sdk>=14,<15'"
         ) from exc
     return stellar_sdk
 
@@ -350,6 +350,23 @@ class AgentContext:
             log.error(f"[SDK ERROR] Soroban Contract Invocation Failed: {error}")
             raise
 
+    # ── deployment (pure-Python, no stellar-cli) ─────────────────────────────
+    def deploy_contract(self, wasm_bytes: bytes, salt: Optional[bytes] = None) -> str:
+        """
+        Deploy a contract WASM and return the new contract id — entirely via
+        signed Soroban transactions, with NO `stellar-cli` / Rust dependency.
+
+        Delegates to the module-level `deploy_contract` using this context's
+        already-wired Soroban RPC client, signing keypair, and passphrase.
+        """
+        return deploy_contract(
+            self.soroban_rpc,
+            self.keypair,
+            self.network_passphrase,
+            wasm_bytes,
+            salt=salt,
+        )
+
     async def acall_contract(
         self,
         contract_id: str,
@@ -417,3 +434,111 @@ class AgentContext:
             return scval.to_native(soroban_meta.return_value)
         except (AttributeError, ValueError):
             return None
+
+
+# ── module-level pure-Python deploy ──────────────────────────────────────────
+def deploy_contract(soroban_rpc, keypair, network_passphrase, wasm_bytes: bytes,
+                    salt: Optional[bytes] = None) -> str:
+    """
+    Upload a contract WASM and instantiate it, returning the new contract id —
+    entirely via signed Soroban transactions, with NO `stellar-cli` / Rust
+    dependency. Reusable from any caller holding a `SorobanServer` + signing
+    `Keypair` (the IDE backend deploys from a raw secret key this way).
+
+    Two on-chain steps, each simulated → prepared → signed → submitted → polled
+    with the same transient-retry logic as `AgentContext.call_contract`:
+      1. Upload the WASM (`append_upload_contract_wasm_op`). The WASM hash is the
+         SHA-256 of the bytes, so re-uploading an already-present WASM is a
+         harmless no-op.
+      2. Instantiate the contract from that hash (`append_create_contract_op`),
+         sourced from the keypair's address. The op's return value is the new
+         contract address.
+    """
+    import hashlib
+
+    _require_stellar_sdk()
+
+    wasm_hash = hashlib.sha256(wasm_bytes).digest()
+    log.info(
+        f"[SDK] Uploading contract WASM ({len(wasm_bytes):,} bytes, "
+        f"hash {wasm_hash.hex()[:16]}…)..."
+    )
+    _build_sign_submit(
+        soroban_rpc, keypair, network_passphrase,
+        lambda b: b.append_upload_contract_wasm_op(contract=wasm_bytes),
+        label="upload_contract_wasm",
+    )
+
+    # A random salt keeps each deploy a distinct instance (mirrors stellar-cli).
+    salt = salt if salt is not None else os.urandom(32)
+    log.info("[SDK] Instantiating contract from uploaded WASM hash...")
+    contract_id = _build_sign_submit(
+        soroban_rpc, keypair, network_passphrase,
+        lambda b: b.append_create_contract_op(
+            wasm_id=wasm_hash, address=keypair.public_key, salt=salt
+        ),
+        label="create_contract",
+    )
+    if not contract_id:
+        raise RuntimeError(
+            "Contract creation submitted but no contract address was returned "
+            "by the network. Retry the deploy."
+        )
+    # to_native decodes an address SCVal to a stellar_sdk.Address; normalize to
+    # the canonical C... StrKey string callers expect.
+    contract_id = getattr(contract_id, "address", contract_id)
+    log.info(f"[SDK] Contract deployed: {contract_id}")
+    return str(contract_id)
+
+
+def _build_sign_submit(soroban_rpc, keypair, network_passphrase, append_op, *, label: str):
+    """
+    Build a single-op tx via `append_op(builder)`, simulate → prepare → sign →
+    submit → poll, and return the decoded native return value (or None). Shares
+    the transient-retry + settle-poll behavior of `AgentContext.call_contract`.
+    """
+    from stellar_sdk import TransactionBuilder, scval
+    from stellar_sdk import xdr as stellar_xdr
+    from stellar_sdk.soroban_rpc import GetTransactionStatus
+
+    source = soroban_rpc.load_account(keypair.public_key)
+    builder = TransactionBuilder(source, network_passphrase, base_fee=100)
+    append_op(builder)
+    tx = builder.set_timeout(300).build()
+
+    sim = rpc_helpers.with_retry(
+        lambda: soroban_rpc.simulate_transaction(tx),
+        label=f"simulate_transaction({label})",
+    )
+    if sim.error:
+        raise RuntimeError(f"Simulation failed ({label}): {sim.error}")
+    sim_return = AgentContext._decode_sim_result(sim, scval, stellar_xdr)
+
+    prepared = rpc_helpers.with_retry(
+        lambda: soroban_rpc.prepare_transaction(tx),
+        label=f"prepare_transaction({label})",
+    )
+    prepared.sign(keypair)
+    send = rpc_helpers.submit_transaction(soroban_rpc, prepared)
+    tx_hash = send.hash
+
+    deadline = time.time() + _POLL_TIMEOUT_SECONDS
+    while True:
+        get = rpc_helpers.with_retry(
+            lambda: soroban_rpc.get_transaction(tx_hash),
+            label=f"get_transaction({label})",
+        )
+        if get.status != GetTransactionStatus.NOT_FOUND:
+            break
+        if time.time() > deadline:
+            raise TimeoutError(
+                f"Transaction {tx_hash} ({label}) did not settle within "
+                f"{_POLL_TIMEOUT_SECONDS}s."
+            )
+        time.sleep(_POLL_INTERVAL_SECONDS)
+
+    if get.status == GetTransactionStatus.FAILED:
+        raise RuntimeError(f"Transaction {tx_hash} ({label}) FAILED: {get.result_xdr}")
+
+    settled_return = AgentContext._decode_tx_result(get, scval, stellar_xdr)
+    return settled_return if settled_return is not None else sim_return

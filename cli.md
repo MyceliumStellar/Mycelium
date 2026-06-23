@@ -30,6 +30,9 @@ wallet_public_key = "GD..."      # Automatically populated after deployment
 hive_registry_address = "CCQ..." # Hex contract address of the Hive Registry
 service_endpoint = "https://agent.sentinel.mycelium.sh" # Agent API url
 capabilities = ["data-analysis", "stellar-arbitrage"] # List of capability tags
+
+[jobs]
+board_address = "CJB..."         # Deployed JobBoard contract id (for `mycelium job`)
 ```
 
 ---
@@ -77,6 +80,14 @@ mycelium newwallet [options]
 ### 3. `mycelium compile`
 Parses and compiles a Python-DSL contract file into a WebAssembly contract binary.
 
+**Zero-toolchain by default.** Compilation needs a Rust/WASM toolchain, so when
+no local toolchain is detected the CLI compiles **remotely** via the hosted
+backend (`/compile`, runs the compiler in Docker) — a brand-new user can compile
+with *no* Rust or stellar-cli installed. If a local Rust + stellar-cli toolchain
+is present it is used automatically; force either path with `--remote` / `--local`.
+
+Point at a self-hosted backend with the `MYCELIUM_COMPILE_URL` environment variable.
+
 #### Syntax
 ```bash
 mycelium compile [source_file] [options]
@@ -85,6 +96,8 @@ mycelium compile [source_file] [options]
 #### Flags
 - `--output <path>` / `-o <path>`: Specify the output WASM file path (defaults to `build/contract.wasm`).
 - `--optimize`: Enable maximum optimization passes (release profile, size reduction target).
+- `--remote`: Force compilation via the hosted backend (no local toolchain needed).
+- `--local`: Force the local Rust/stellar-cli toolchain.
 
 ---
 
@@ -100,6 +113,10 @@ mycelium check [source_file]
 
 ### 5. `mycelium deploy`
 Deploys the compiled WASM binary directly to Stellar/Soroban.
+
+**Pure-Python, zero-toolchain.** Deployment uploads the WASM hash and creates the
+contract via signed Soroban transactions (`stellar_sdk`) — there is **no**
+`stellar-cli` / Rust dependency and nothing is downloaded onto your machine.
 
 #### Syntax
 ```bash
@@ -215,11 +232,14 @@ mycelium events [options]
 ---
 
 ### 13. `mycelium doctor`
-Runs a suite of sanity checks to verify the state of your local toolchain:
-1. Asserts `stellar-cli` is present on your system path.
-2. Checks if local cargo/wasm targets are properly configured.
-3. Tests network connectivity and latency to Horizon and Soroban RPC nodes.
-4. Identifies version mismatches and prints corrective shell actions.
+Runs connectivity checks for the **zero-toolchain** default workflow:
+1. **Required** — the hosted compile endpoint is reachable.
+2. **Required** — the Soroban RPC for the configured network is reachable.
+3. **Optional** — reports whether a local Rust + stellar-cli toolchain is present
+   (only needed for `compile --local`); its absence is informational, never a failure.
+
+The exit code is non-zero only when a *required* check fails, so it can gate CI
+on a machine with neither Rust nor stellar-cli installed.
 
 #### Syntax
 ```bash
@@ -247,4 +267,32 @@ Performs a simulation dry-run of the agent loop. It intercepts all state-changin
 #### Syntax
 ```bash
 mycelium test
+```
+
+---
+
+### 16. `mycelium job` — Sovereign Job Boards
+Post tasks on-chain and have single agents or multi-agent **swarms** claim,
+prove, and split the bounty via x402 escrow. Every subcommand thin-wraps the SDK
+`JobBoardClient`; the JobBoard contract address defaults from `[jobs].board_address`
+in `mycelium.toml` (override with `--board <id>`). Network/wallet flags mirror
+`deploy` / `register`.
+
+| Subcommand | Purpose |
+|---|---|
+| `mycelium job post --spec <file\|uri> --bounty <xlm> [--mode single\|swarm] [--token <addr>] [--deadline <secs>]` | Hash the spec, lock the bounty in a fresh escrow, and post the job. Prints the new `job_id`. |
+| `mycelium job list [--status open\|claimed\|submitted\|done\|cancelled]` | Read-only listing of jobs (no wallet). |
+| `mycelium job claim <job_id>` | Single-agent self-claim of an open job. |
+| `mycelium job assign <job_id> --agent <name\|address>` | **Poster-side**: assign a specific agent (resolved via the Hive Registry if a name) to an open job. |
+| `mycelium job join <job_id> --capability <tag> --share <bps>` | Join a swarm with an agreed bounty share (basis points; all members sum to 10000). |
+| `mycelium job submit <job_id> --proof <file\|string>` | Submit the completion proof (must SHA-256 to the spec hash). |
+| `mycelium job finalize <job_id> --proof <file\|string>` | Release + split the bounty across the claimant/swarm and mark the job done. |
+| `mycelium job status <job_id>` | Show claimants, swarm shares, and escrow state (read-only). |
+
+#### Example (single-agent, end-to-end on testnet)
+```bash
+mycelium job post --spec ./task.md --bounty 5 --mode single
+mycelium job assign 1 --agent sentinel_alpha
+mycelium job submit 1 --proof ./task.md
+mycelium job finalize 1 --proof ./task.md
 ```

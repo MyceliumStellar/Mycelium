@@ -17,7 +17,7 @@ The compiled WASM is bundled into `mycelium_sdk` and instantiated on demand by
 
 from mycelium import (
     contract, external, view,
-    Address, U64, I128, Bytes, Bool, Map, Env, Symbol,
+    Address, U64, I128, Bytes, Bool, Map, Vec, Env, Symbol,
 )
 
 
@@ -27,6 +27,7 @@ class ContractError:
     ALREADY_SETTLED = 3
     INVALID_PROOF = 4
     NOT_EXPIRED = 5
+    BAD_SPLIT = 6
 
 
 @contract
@@ -90,6 +91,50 @@ class Escrow:
 
         self.storage.set("settled", True)
         self.env.emit_event("escrow_released", {"provider": provider, "amount": amount})
+        return True
+
+    @external
+    def claim_and_split(
+        self,
+        proof: Bytes,
+        recipients: Vec[Address],
+        amounts: Vec[I128],
+    ) -> Bool:
+        """
+        Release the locked funds across N recipients (a swarm), paying
+        `amounts[i]` of the locked token to `recipients[i]`. `proof` must hash
+        (SHA-256) to the agreed `task_hash`. The two vectors must be the same
+        length and the amounts must sum to the locked amount. Powers the
+        Sovereign Job Boards multi-agent bounty split (`EscrowPaymentRouter.
+        split_release`). Reverts if uninitialized, already settled, the proof is
+        invalid, or the split does not balance.
+        """
+        if not self.storage.get("init", False):
+            raise ContractError.NOT_INITIALIZED
+        if self.storage.get("settled", False):
+            raise ContractError.ALREADY_SETTLED
+        if self.env.crypto().sha256(proof) != self.storage.get("task_hash"):
+            raise ContractError.INVALID_PROOF
+
+        n = len(recipients)
+        if n != len(amounts):
+            raise ContractError.BAD_SPLIT
+
+        token = self.storage.get("token")
+        amount = self.storage.get("amount")
+
+        total = I128(0)
+        for i in range(n):
+            total = total + amounts[i]
+        if total != amount:
+            raise ContractError.BAD_SPLIT
+
+        contract_addr = self.env.current_contract_address()
+        for i in range(n):
+            self.env.transfer(contract_addr, recipients[i], token, amounts[i])
+
+        self.storage.set("settled", True)
+        self.env.emit_event("escrow_split", {"recipients": n, "amount": amount})
         return True
 
     @external

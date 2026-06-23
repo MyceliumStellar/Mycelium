@@ -108,6 +108,11 @@ export default function Home() {
               onMouseEnter={e => e.currentTarget.style.color = "#fff"}
               onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.45)"}
             >agents</Link>
+            <Link href="/bounty"
+              style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", transition: "color 0.2s" }}
+              onMouseEnter={e => e.currentTarget.style.color = "#fff"}
+              onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.45)"}
+            >bounty</Link>
             <Link href="/docs"
               style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", display: "flex", alignItems: "center", gap: "4px" }}
               onMouseEnter={e => e.currentTarget.style.color = "#fff"}

@@ -153,8 +153,8 @@ image internals.
 The Next.js application routes traffic across three distinct user views:
 
 * **`/` (Landing Page)**: The primary branding page, illustrating the core value proposition, interactive CLI emulation terminals, bento feature matrices, and agent architecture overviews.
-* **`/agent` (Agent Swarms Network)**: A live visual directory displaying all running agents registered in the Hive Registry. It shows the on-chain Registry address, connects agents as glowing nodes with interactive links/wires, and displays selected agent metadata panels on tap/click.
-* **`/playground` (Playground IDE)**: The full Monaco-powered browser environment containing workspace management, code compilation logs, transaction simulation results, and wallet balances.
+* **`/agent` (Agent Swarms Network)**: A live visual directory displaying all running agents registered in the Hive Registry. It shows the on-chain Registry address, connects agents as glowing nodes with interactive links/wires, and displays selected agent metadata panels on tap/click. A **"Create Agent"** wizard (mirrors `mycelium init`) collects name / provider / API key / model (discovered live via `POST /api/models`), scaffolds a repo via `POST /api/agents/scaffold`, then opens the playground in creation mode.
+* **`/playground` (Playground IDE)**: The full Monaco-powered browser environment containing workspace management, code compilation logs, transaction simulation results, and wallet balances. With `?repo=<name>&mode=create` it enters **agent-creation mode**: auto-loads the repo and shows a **Write → Compile → Deploy → Register** guided rail (the Register step invokes `register_agent` on the Hive Registry via Freighter).
 
 ---
 
@@ -210,7 +210,9 @@ Base URL: `http://localhost:8000`. All `/api/*` endpoints require a session JWT:
 
 ### Deployment
 * `POST /api/deploy`
-  * Deploys a compiled WASM to Soroban via the `stellar` CLI.
+  * Deploys a compiled WASM to Soroban via **pure-Python signed transactions**
+    (upload WASM hash → create contract, `mycelium_sdk.context.deploy_contract`).
+    No `stellar` CLI / Rust dependency.
   * **Request:** `{"wasm_base64": "...", "network": "testnet" | "mainnet", "secret_key": "<S...>?"}`
   * **Behavior:**
     * `testnet` → RPC `https://soroban-testnet.stellar.org`. If no `secret_key`
@@ -218,10 +220,27 @@ Base URL: `http://localhost:8000`. All `/api/*` endpoints require a session JWT:
       (with a ~4s settle delay) before deploying.
     * `mainnet` → RPC `https://mainnet.sorobanrpc.com`; a `secret_key` is
       **required**.
-    * Deployment runs `stellar contract deploy` with a 45s timeout.
   * **Response:** `{"success": true, "contract_id": "C...", "network": "testnet"}`
     plus `generated_address` / `generated_secret` when a temporary testnet
     account was created.
+
+### In-IDE Agent Creation
+* `POST /api/models`  *(header: `Authorization: Bearer <JWT>`)*
+  * Proxies live model discovery so the provider API key never round-trips
+    through the browser. Mirrors the CLI's `_select_model` (`mycelium_sdk.models`).
+  * **Request:** `{"framework": "gemini" | "anthropic" | "openai" | "ollama" | ..., "api_key": "<key>?", "base_url": "<url>?"}`
+  * **Response:** `{"framework": "...", "models": ["..."], "supports_discovery": true}`
+* `POST /api/agents/scaffold`  *(header: `Authorization: Bearer <JWT>`)*
+  * Creates a private GitHub repo and commits a full agent scaffold
+    (`mycelium.toml`, `contract.py`, `agent.py`, `.gitignore`, `README.md`) from
+    the **shared** `mycelium_sdk.scaffold` templates — the same source of truth
+    as `mycelium init`, so the CLI and IDE never drift. The provider API key is
+    stored encrypted under `user_credentials/{uid}/agent_api_keys/{repo}` (never
+    committed); an encrypted wallet is generated only if a passphrase is supplied.
+  * **Request:** `{"project_name": "...", "framework": "...", "model": "...", "unique_name": "...?", "api_key": "...?", "wallet_passphrase": "...?"}`
+  * **Response:** `{"success": true, "repo": "...", "files": [...], "unique_name": "...", "wallet_public_key": "...?", "api_key_stored": true}`
+  * The frontend then opens `/playground?repo=<name>&mode=create`, which loads
+    the repo and shows the **Write → Compile → Deploy → Register** guided rail.
 
 ---
 

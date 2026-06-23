@@ -51,6 +51,11 @@ export default function Playground() {
 
   // Contract Invocation & Draft States
   const [deployedContractId, setDeployedContractId] = useState("");
+  // Agent-creation mode (opened from the /agent "Create Agent" wizard via
+  // ?repo=<name>&mode=create): auto-loads the repo and shows a guided rail.
+  const [creationMode, setCreationMode] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [registeredTx, setRegisteredTx] = useState("");
   const [selectedFunc, setSelectedFunc] = useState("");
   const [funcArgs, setFuncArgs] = useState<Record<string, string>>({});
   const [isInvoking, setIsInvoking] = useState(false);
@@ -140,6 +145,21 @@ export default function Playground() {
     if (isAuthenticated && sessionToken) {
       fetchWorkspaces();
       pingStellarNetwork();
+    }
+  }, [isAuthenticated, sessionToken]);
+
+  // Agent-creation mode: when arriving from the wizard with ?repo=&mode=create,
+  // open that repo and surface the Write → Compile → Deploy → Register rail.
+  useEffect(() => {
+    if (!isAuthenticated || !sessionToken) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("mode") === "create") {
+      const repo = params.get("repo");
+      if (repo) {
+        setCreationMode(true);
+        setActiveWorkspace(repo);
+        addTerminalLog("success", `Agent-creation mode: loaded repo '${repo}'. Follow the guided steps: Write → Compile → Deploy → Register.`);
+      }
     }
   }, [isAuthenticated, sessionToken]);
 
@@ -1529,6 +1549,97 @@ export default function Playground() {
     }
   };
 
+  // Register the freshly-deployed agent on the Hive Registry (creation-mode
+  // final step). Invokes register_agent via Freighter, mirroring the SDK's
+  // HiveClient.register / `mycelium register`. unique_name = the repo name.
+  const HIVE_REGISTRY_ADDRESS = "CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC";
+  const handleRegisterAgent = async () => {
+    if (!isWalletConnected || !walletAddress) {
+      toast.error("Connect Freighter first to register.");
+      return;
+    }
+    if (!deployedContractId) {
+      toast.error("Deploy the contract before registering.");
+      return;
+    }
+    setIsRegistering(true);
+    try {
+      const StellarSdk = await import("@stellar/stellar-sdk");
+      const freighter = await import("@stellar/freighter-api");
+
+      const isTestnet = walletNetwork !== "PUBLIC";
+      const rpcUrl = isTestnet ? "https://soroban-testnet.stellar.org" : "https://mainnet.sorobanrpc.com";
+      const horizonUrl = isTestnet ? "https://horizon-testnet.stellar.org" : "https://horizon.stellar.org";
+      const networkPassphrase = isTestnet ? StellarSdk.Networks.TESTNET : StellarSdk.Networks.PUBLIC;
+      const server = new StellarSdk.rpc.Server(rpcUrl);
+
+      const uniqueName = activeWorkspace;
+      addTerminalLog("info", `Registering agent '${uniqueName}' on the Hive Registry…`);
+
+      const accRes = await fetch(`${horizonUrl}/accounts/${walletAddress}`);
+      if (!accRes.ok) throw new Error(`Failed to fetch account info: ${accRes.statusText}`);
+      const accData = await accRes.json();
+      const sourceAccount = new StellarSdk.Account(walletAddress, accData.sequence);
+
+      const enc = (s: string) => StellarSdk.xdr.ScVal.scvBytes(Buffer.from(s, "utf-8"));
+      // capability_hash = SHA-256 of the sorted, comma-joined tags (empty here).
+      const capHashBuf = Buffer.from(
+        new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode("")))
+      );
+      const endpoint = `https://${uniqueName}.agents.mycelium.sh/api/v1`;
+
+      const args = [
+        StellarSdk.xdr.ScVal.scvSymbol(uniqueName),
+        StellarSdk.Address.fromString(walletAddress).toScVal(),
+        StellarSdk.xdr.ScVal.scvBytes(capHashBuf),
+        enc(endpoint),
+        enc(""),                       // model
+        enc("Autonomous Agent"),       // role
+        enc("Created via the Mycelium Web IDE."),  // desc
+      ];
+
+      let tx = new StellarSdk.TransactionBuilder(sourceAccount, { fee: "1000000", networkPassphrase })
+        .addOperation(StellarSdk.Operation.invokeContractFunction({
+          contract: HIVE_REGISTRY_ADDRESS,
+          function: "register_agent",
+          args,
+        }))
+        .setTimeout(0)
+        .build();
+
+      const simResult = await server.simulateTransaction(tx);
+      if ((simResult as any).error) throw new Error(`Simulation failed: ${(simResult as any).error}`);
+      tx = StellarSdk.rpc.assembleTransaction(tx, simResult).build();
+      const txHash = tx.hash().toString("hex");
+
+      const signResult = await freighter.signTransaction(tx.toXDR(), { networkPassphrase });
+      const signedTx = StellarSdk.TransactionBuilder.fromXDR(signResult.signedTxXdr, networkPassphrase);
+      const sendRes = await server.sendTransaction(signedTx);
+      if (sendRes.status === "ERROR") throw new Error(`Registration rejected: ${JSON.stringify((sendRes as any).errorResult)}`);
+
+      let status = await server.getTransaction(txHash);
+      let retries = 15;
+      while (status.status === "NOT_FOUND" && retries > 0) {
+        await new Promise(r => setTimeout(r, 2000));
+        status = await server.getTransaction(txHash);
+        retries--;
+      }
+      if (status.status !== "SUCCESS") throw new Error(`Registration failed with status: ${status.status}`);
+
+      setRegisteredTx(txHash);
+      addTerminalLog("success", `✓ Agent '${uniqueName}' registered on the Hive Registry. Tx: ${txHash}`);
+      toast.success("Agent registered! It will appear on the Agent Network.");
+      setTimeout(() => { window.location.href = "/agent"; }, 1800);
+    } catch (err: any) {
+      const m = String(err?.message || err);
+      addTerminalLog("error", `❌ Registration failed: ${m}`);
+      toast.error(m.toLowerCase().includes("nametaken") || m.toLowerCase().includes("taken")
+        ? "That agent name is already taken." : "Registration failed.");
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
   // Ping Stellar Horizon server to show live network metrics
   const pingStellarNetwork = async () => {
     setIsPinging(true);
@@ -1783,6 +1894,22 @@ export default function Playground() {
               onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border-color)"}
               >
                 AGENTS NETWORK
+              </Link>
+
+              {/* Bounty Link Badge */}
+              <Link href="/bounty" style={{
+                fontSize: "0.8rem",
+                fontFamily: "var(--font-mono)",
+                background: "#0c0c0e",
+                border: "1px solid var(--border-color)",
+                padding: "2px 8px",
+                color: "var(--accent-cyan)",
+                transition: "all 0.2s"
+              }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = "var(--accent-cyan)"}
+              onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border-color)"}
+              >
+                BOUNTY BOARD
               </Link>
               
               {/* Docs Link Badge */}
@@ -2082,7 +2209,122 @@ export default function Playground() {
               background: "#000000",
               overflow: "hidden"
             }}>
-              
+
+              {/* Agent-creation guided rail (Write → Compile → Deploy → Register) */}
+              {creationMode && (() => {
+                const activeStep = !editorContent ? 1 : !compiledWasm ? 2 : !deployedContractId ? 3 : !registeredTx ? 4 : 5;
+                return (
+                  <div style={{
+                    padding: "14px 24px",
+                    borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+                    background: "rgba(10, 10, 12, 0.8)",
+                    backdropFilter: "blur(16px)",
+                    WebkitBackdropFilter: "blur(16px)",
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: "20px", flexWrap: "wrap",
+                    position: "relative",
+                    zIndex: 20
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#ffffff", letterSpacing: "1.5px", textTransform: "uppercase", fontFamily: "var(--font-mono)" }}>
+                        CREATING AGENT: <span style={{ color: "var(--accent-cyan)" }}>{activeWorkspace}</span>
+                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        {[
+                          { n: 1, label: "Write", done: !!editorContent },
+                          { n: 2, label: "Compile", done: !!compiledWasm },
+                          { n: 3, label: "Deploy", done: !!deployedContractId },
+                          { n: 4, label: "Register", done: !!registeredTx },
+                        ].map((s, idx) => {
+                          const isDone = s.done;
+                          const isActive = s.n === activeStep;
+                          
+                          let circleStyle: React.CSSProperties = {};
+                          let textStyle: React.CSSProperties = {};
+                          
+                          if (isDone) {
+                            circleStyle = {
+                              background: "var(--accent-green)",
+                              color: "#040405",
+                              boxShadow: "0 0 10px rgba(15, 159, 120, 0.3)"
+                            };
+                            textStyle = {
+                              color: "#ffffff",
+                              fontWeight: 600
+                            };
+                          } else if (isActive) {
+                            circleStyle = {
+                              border: "1.5px solid var(--accent-cyan)",
+                              color: "var(--accent-cyan)",
+                              background: "rgba(0, 150, 199, 0.06)",
+                              boxShadow: "0 0 8px rgba(0, 150, 199, 0.3)"
+                            };
+                            textStyle = {
+                              color: "var(--accent-cyan)",
+                              fontWeight: 600
+                            };
+                          } else {
+                            circleStyle = {
+                              border: "1px solid rgba(255, 255, 255, 0.15)",
+                              color: "rgba(255, 255, 255, 0.3)",
+                              background: "rgba(255, 255, 255, 0.02)"
+                            };
+                            textStyle = {
+                              color: "rgba(255, 255, 255, 0.3)",
+                              fontWeight: 400
+                            };
+                          }
+                          
+                          return (
+                            <React.Fragment key={s.n}>
+                              {idx > 0 && <span style={{ color: "rgba(255, 255, 255, 0.15)", fontSize: "0.8rem" }}>→</span>}
+                              <span style={{
+                                fontSize: "0.76rem", display: "flex", alignItems: "center", gap: "6px", ...textStyle
+                              }}>
+                                <span style={{
+                                  width: "20px", height: "20px", borderRadius: "50%", fontSize: "0.68rem",
+                                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                  fontWeight: 700, transition: "all 0.3s ease", ...circleStyle
+                                }}>{isDone ? "✓" : s.n}</span>
+                                {s.label}
+                              </span>
+                            </React.Fragment>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleRegisterAgent}
+                      disabled={isRegistering || !deployedContractId || !!registeredTx}
+                      style={{
+                        background: registeredTx 
+                          ? "rgba(255,255,255,0.03)" 
+                          : isRegistering || !deployedContractId
+                            ? "rgba(255,255,255,0.02)"
+                            : "linear-gradient(135deg, rgba(139, 92, 246, 0.95), rgba(0, 242, 254, 0.95))",
+                        border: registeredTx 
+                          ? "1px solid rgba(15, 159, 120, 0.3)" 
+                          : "1px solid rgba(255, 255, 255, 0.08)", 
+                        borderRadius: "6px", 
+                        padding: "9px 18px",
+                        color: registeredTx 
+                          ? "var(--accent-green)" 
+                          : isRegistering || !deployedContractId 
+                            ? "rgba(255,255,255,0.25)" 
+                            : "#000000", 
+                        fontWeight: 700, 
+                        fontSize: "0.78rem",
+                        cursor: deployedContractId && !registeredTx ? "pointer" : "not-allowed",
+                        opacity: deployedContractId && !registeredTx ? 1 : 0.6, 
+                        whiteSpace: "nowrap",
+                        transition: "all 0.2s ease"
+                      }}
+                    >
+                      {registeredTx ? "✓ Registered" : isRegistering ? "Registering…" : "Register on Hive"}
+                    </button>
+                  </div>
+                );
+              })()}
+
               {/* Tool Control Header */}
               <div style={{
                 display: "flex",

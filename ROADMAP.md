@@ -18,12 +18,14 @@ All major architectural components of the core developer workflow are fully impl
 | **Command Line Interface (CLI)** | 18 fully implemented CLI commands wrapper (e.g., `init`, `newwallet`, `compile`, `check`, `deploy`, `register`, `status`, `fund`, `call`, `resolve`, `pay`, `events`, `doctor`, `run`, `test`, `agent`, `discover`). |
 | **Typed Contract Clients** | Spec-driven clients (`ctx.contract(cid)`) supporting auto-generated sync, async (`.aio`), and read-only (`.read`) interfaces directly reflecting on-chain code structures. |
 | **Orchestration Loop** | One-call agent execution helper (`run_agent_loop` + `ContractTool`) to wire Gemini / Anthropic agents to on-chain smart contract methods seamlessly. |
+| **Zero-Toolchain Operation** | The CLI + SDK work end-to-end with **no local Rust / stellar-cli install**. Deploy is pure-Python signed Soroban transactions (`AgentContext.deploy_contract` — upload WASM hash → create contract); compile defaults to the hosted `/compile` backend (Docker), falling back to a local toolchain only when one is detected (`compile --local`). `mycelium doctor` treats the local toolchain as optional. |
 
 ---
 
 ## 2. Future Enhancements & Extensions
 
 ### 💻 Web IDE Playground Extensions
+- **In-IDE Agent Creation**: The `/agent` route's "Create Agent" wizard mirrors `mycelium init` (name, provider, API key, model), scaffolds a new GitHub repo via the backend (`POST /api/agents/scaffold`), then opens the playground in an **agent-creation mode** guiding Write → Compile → Deploy → Register entirely in-browser (client-side compile + Freighter deploy/register).
 - **Live Execution Visual Tracer**: Render a real-time reactive graph showing contract state changes, event emissions, and token flows during transaction execution.
 - **Multiplayer Workspaces**: Collaborative coding sandbox allowing multiple developers to work together inside the Monaco editor, synced back to a shared GitHub repository.
 - **Monaco IntelliSense for DSL**: Custom language server integration providing syntax highlighting, auto-complete, and inline type-checking for Mycelium decorator and typing primitives.
@@ -45,6 +47,42 @@ All major architectural components of the core developer workflow are fully impl
 - **Interactive Contract REPL**: An interactive shell (`mycelium repl`) allowing developers to call contract functions and inspect state variables live on a local sandbox node.
 - **Local Ledger Node Wrapper**: Wrap the official `stellar-cli` node engine (`mycelium node start`) to run a local developer validator instance in a single command.
 - **Agent Templates Library**: Scaffolding presets (e.g., `mycelium init --template arbitrage`, `mycelium init --template dao-member`) to bootstrap complex multi-agent architectures immediately.
+
+---
+
+## 💼 Sovereign Job Boards
+
+Post a task on-chain; single agents or multi-agent **swarms** claim, coordinate,
+execute, and split bounties via x402 payments. Builds on the escrow foundation
+(§6.1) and the Hive Registry discovery layer, with an off-chain indexer (§5).
+
+**Architecture**
+```
+Poster ──post_job(spec_hash, bounty, mode)──► JobBoard contract ──locks bounty──► Escrow (x402)
+                                                     │
+        Agents ──claim_job / join_swarm─────────────┤
+                                                     │
+   Swarm coordinates off-chain (A2A) ─► submit_proof ─► JobBoard verifies ─► split bounty
+```
+
+**Components**
+- **On-chain `JobBoard` contract** (Mycelium DSL): `post_job` (locks bounty into an
+  escrow instance), `claim_job` / `assign_agent` / `join_swarm` (share basis points
+  summing to 10000), `submit_proof` (SHA-256 matches `spec_hash`), `finalize`
+  (releases + N-way splits the bounty), `cancel_job` / `expire` (refund after
+  deadline). Emits `job_posted` / `job_claimed` / `swarm_joined` / `job_completed`.
+- **SDK** (`mycelium_sdk/jobs.py`): `JobBoardClient` thin-wrapping the contract;
+  `EscrowPaymentRouter.split_release` for N-way bounty division across a swarm.
+- **CLI** (`mycelium job …`): `post`, `list`, `claim`, `assign`, `join`, `submit`,
+  `finalize`, `status` — fully drivable from the console.
+- **UI**: `/jobs` route (open jobs, post form, job detail with claimants + shares)
+  and an agent-facing job feed on `/agent`.
+
+**Phased milestones**
+1. **M1 — Escrow groundwork**: finish single-provider `EscrowPaymentRouter` (§6.1); add N-way `split_release`.
+2. **M2 — JobBoard contract + CLI**: author/compile `job_board_contract.py` (incl. `assign_agent`); ship the `mycelium job` group; single-agent post→assign/claim→proof→finalize on testnet.
+3. **M3 — Swarm mode**: `join_swarm` + share accounting + multi-way split; A2A coordination demo.
+4. **M4 — Indexer + UI**: off-chain job indexer (ties into §5); `/jobs` route + agent-facing feed.
 
 ---
 
