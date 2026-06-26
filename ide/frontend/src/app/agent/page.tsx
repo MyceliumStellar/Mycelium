@@ -41,6 +41,11 @@ interface ResolvedAgent {
 const REGISTRY_ADDRESS = "CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC";
 const DEFAULT_NAMES = ["myc_6465185c", "myc2_dd9246f1"];
 
+// Hosted off-chain indexer — one call returns every agent with full metadata,
+// replacing the O(N) event-scan + per-name resolve. Falls back to on-chain.
+const INDEXER_URL =
+  process.env.NEXT_PUBLIC_INDEXER_URL || "https://mycelium-indexer.onrender.com";
+
 // Backend API gateway (shared with the playground). Used by the agent-creation wizard.
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 // Mirrors mycelium_sdk.scaffold.VALID_FRAMEWORKS / init.py.
@@ -269,10 +274,57 @@ export default function AgentNetworkPage() {
     };
   };
 
+  // One indexer call returns every agent with full metadata. Returns null on any
+  // failure so the caller falls back to the on-chain scan + resolve.
+  const loadAgentsFromIndexer = async (): Promise<ResolvedAgent[] | null> => {
+    try {
+      const res = await fetch(`${INDEXER_URL}/agents?limit=200`, {
+        signal: AbortSignal.timeout(6000),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const list = Array.isArray(data?.agents) ? data.agents : null;
+      if (!list || list.length === 0) return null;
+
+      const palette = ["#00f2fe", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444"];
+      return list.map((a: any, i: number) => {
+        const angle = (i * 2 * Math.PI) / list.length;
+        const radius = 170;
+        return {
+          id: a.name,
+          name: a.name,
+          role: a.role || "Autonomous Agent",
+          x: Math.round(400 + radius * Math.cos(angle)),
+          y: Math.round(250 + radius * Math.sin(angle)),
+          color: palette[i % palette.length],
+          status: "Active" as const,
+          address: a.address || "",
+          capabilityHash: Array.isArray(a.capability_tags) ? a.capability_tags.join(", ") : "",
+          endpoint: a.endpoint || "",
+          reputation: Number(a.reputation || 0),
+          model: a.model || "gemini-2.0-flash",
+          description: a.desc || a.description || "On-chain agent indexed from the Hive Registry.",
+        };
+      });
+    } catch (_) {
+      return null;
+    }
+  };
+
   const loadInitialAgents = async () => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
+      // Indexer first (instant, full metadata in one call).
+      const indexed = await loadAgentsFromIndexer();
+      if (indexed && indexed.length > 0) {
+        setAgents(indexed);
+        setSelectedAgent(indexed[0]);
+        setIsLoading(false);
+        return;
+      }
+
+      // Fallback: scan registry events on-chain, then resolve each name.
       let names = [...DEFAULT_NAMES];
       try {
         const onChainNames = await discoverAgentsOnChain();

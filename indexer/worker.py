@@ -66,6 +66,7 @@ class IndexerWorker:
         rpc,
         contract_ids: Dict[str, str],
         resolve_agent: Optional[Callable[[str], Dict[str, Any]]] = None,
+        resolve_job: Optional[Callable[[int], Dict[str, Any]]] = None,
     ):
         self.db = db
         self.rpc = rpc
@@ -73,6 +74,11 @@ class IndexerWorker:
         self.contract_ids = contract_ids
         self._resolve_agent = resolve_agent
         self._agent_cache: Dict[str, Dict[str, Any]] = {}
+        # resolve_job(job_id) -> full get_job dict; called once per new job to
+        # capture the immutable fields the `job_posted` event omits (token, mode,
+        # escrow, deadline). Enriched job ids are cached for the process.
+        self._resolve_job = resolve_job
+        self._job_enriched: set = set()
 
     # ── cursor ────────────────────────────────────────────────────────────────
     def _load_cursor(self) -> Optional[int]:
@@ -179,16 +185,27 @@ class IndexerWorker:
         ref.set(doc, merge=True)
 
     def _upsert_job_posted(self, rec: Dict[str, Any]) -> None:
-        self.db.collection("jobs").document(str(rec["job_id"])).set(
-            {
-                "job_id": rec["job_id"],
-                "poster": rec.get("poster"),
-                "bounty": rec.get("bounty"),
-                "status": "open",
-                "posted_ledger": rec.get("ledger"),
-            },
-            merge=True,
-        )
+        job_id = rec["job_id"]
+        doc: Dict[str, Any] = {
+            "job_id": job_id,
+            "poster": rec.get("poster"),
+            "bounty": rec.get("bounty"),
+            "status": "open",
+            "posted_ledger": rec.get("ledger"),
+        }
+        # Enrich once with the immutable fields the event doesn't carry. The
+        # event-driven status/agent set elsewhere stays authoritative, so we only
+        # copy token/mode/escrow/deadline here.
+        if job_id not in self._job_enriched and self._resolve_job is not None:
+            try:
+                details = self._resolve_job(job_id) or {}
+                for key in ("token", "mode", "escrow", "deadline"):
+                    if details.get(key) is not None:
+                        doc[key] = details[key]
+            except Exception:
+                pass
+            self._job_enriched.add(job_id)
+        self.db.collection("jobs").document(str(job_id)).set(doc, merge=True)
 
     def _upsert_job_status(self, rec: Dict[str, Any]) -> None:
         doc: Dict[str, Any] = {"status": rec["status"], "last_update_ledger": rec.get("ledger")}
@@ -232,8 +249,28 @@ def build_default_worker(network: str = "testnet") -> IndexerWorker:
         details.setdefault("capability_tags", [])
         return details
 
-    contracts = {"registry": HIVEMIND_REGISTRY_ADDRESS, "job_board": _board_address()}
-    return IndexerWorker(get_firestore(), ctx.soroban_rpc, contracts, resolve_agent=_resolve)
+    board = _board_address()
+
+    resolve_job = None
+    if board:
+        from mycelium_sdk import JobBoardClient
+
+        jobs = JobBoardClient(ctx, board)
+
+        def resolve_job(job_id: int) -> Dict[str, Any]:
+            j = jobs.get_job(job_id)
+            return {
+                "token": j.get("token"),
+                "mode": j.get("mode"),
+                "escrow": j.get("escrow"),
+                "deadline": j.get("deadline"),
+            }
+
+    contracts = {"registry": HIVEMIND_REGISTRY_ADDRESS, "job_board": board}
+    return IndexerWorker(
+        get_firestore(), ctx.soroban_rpc, contracts,
+        resolve_agent=_resolve, resolve_job=resolve_job,
+    )
 
 
 def main() -> None:

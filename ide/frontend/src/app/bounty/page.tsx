@@ -46,6 +46,37 @@ interface Job {
 const JOB_BOARD_ADDRESS = "CAIGNIJBUA4GKKJBIO27JOAELZQ4KA7AYMB2F5C3W2D3DGQANZZCJGEH";
 const HIVE_REGISTRY_ADDRESS = "CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC";
 
+// Hosted off-chain indexer — O(1) discovery. The board reads from it first and
+// falls back to direct on-chain simulation when it's empty/unreachable.
+const INDEXER_URL =
+  process.env.NEXT_PUBLIC_INDEXER_URL || "https://mycelium-indexer.onrender.com";
+
+// Build a Job from an indexer `/jobs` row (members/shares fetched separately for
+// swarm jobs). The indexer doesn't store spec_uri, so the description is
+// synthesized exactly like the on-chain path's fallback.
+function mapIndexerJob(j: any, members: string[], shares: number[]): Job {
+  const id = Number(j.job_id);
+  const bounty = Number(j.bounty || 0) / 10000000;
+  const escrow = j.escrow || "";
+  return {
+    id,
+    poster: j.poster || "",
+    bounty,
+    token: j.token || "",
+    mode: (j.mode || "single") as "single" | "swarm",
+    escrow,
+    deadline: Number(j.deadline || 0),
+    status: (j.status || "open") as Job["status"],
+    agent: j.agent || "",
+    members,
+    shares,
+    title: `On-Chain Bounty #${id}`,
+    description: `Sovereign Job #${id} coordination pipeline. Deployed on Stellar Testnet, locking a bounty of ${bounty} XLM. Payout release requires a valid cryptographic proof submitted to escrow contract ${
+      escrow ? `${escrow.slice(0, 10)}...${escrow.slice(-6)}` : "(pending)"
+    }.`,
+  };
+}
+
 export default function BountyBoard() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
@@ -59,9 +90,7 @@ export default function BountyBoard() {
   const [walletAddress, setWalletAddress] = useState("");
   const [walletNetwork, setWalletNetwork] = useState("");
 
-  const loadJobs = async () => {
-    setIsLoading(true);
-    setErrorMsg(null);
+  const loadJobsOnChain = async (): Promise<Job[]> => {
     try {
       const StellarSdk = await import("@stellar/stellar-sdk");
       const rpcUrl = "https://soroban-testnet.stellar.org";
@@ -215,19 +244,65 @@ export default function BountyBoard() {
         }
       }
 
-      setJobs(fetchedJobs);
-      if (fetchedJobs.length > 0) {
-        setSelectedJob(fetchedJobs[0]);
-      } else {
-        setSelectedJob(null);
-      }
+      return fetchedJobs;
     } catch (err) {
       console.warn("Failed to read on-chain jobs:", err);
-      setJobs([]);
-      setSelectedJob(null);
-    } finally {
-      setIsLoading(false);
+      return [];
     }
+  };
+
+  // Read the job list from the hosted indexer (O(1), full history). Returns null
+  // on any failure so the caller can fall back to the on-chain scan. Swarm
+  // members/shares come from the per-job endpoint.
+  const loadJobsFromIndexer = async (): Promise<Job[] | null> => {
+    try {
+      const res = await fetch(`${INDEXER_URL}/jobs?limit=100`, {
+        signal: AbortSignal.timeout(6000),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const list = Array.isArray(data?.jobs) ? data.jobs : null;
+      if (!list) return null;
+
+      const mapped: Job[] = [];
+      for (const j of list) {
+        const mode = (j.mode || "single") as "single" | "swarm";
+        let members: string[] = [];
+        let shares: number[] = [];
+        if (mode === "swarm") {
+          try {
+            const r2 = await fetch(`${INDEXER_URL}/jobs/${j.job_id}`, {
+              signal: AbortSignal.timeout(6000),
+            });
+            if (r2.ok) {
+              const d2 = await r2.json();
+              const ms = Array.isArray(d2?.job?.members) ? d2.job.members : [];
+              members = ms.map((m: any) => m.agent);
+              shares = ms.map((m: any) => Number(m.share_bps));
+            }
+          } catch (_) {}
+        }
+        mapped.push(mapIndexerJob(j, members, shares));
+      }
+      mapped.sort((a, b) => b.id - a.id); // newest first
+      return mapped;
+    } catch (_) {
+      return null;
+    }
+  };
+
+  const loadJobs = async () => {
+    setIsLoading(true);
+    setErrorMsg(null);
+    // Indexer first (instant); fall back to on-chain when it's empty or
+    // unreachable, so a freshly posted job still shows before it's ingested.
+    let result = await loadJobsFromIndexer();
+    if (!result || result.length === 0) {
+      result = await loadJobsOnChain();
+    }
+    setJobs(result);
+    setSelectedJob(result.length > 0 ? result[0] : null);
+    setIsLoading(false);
   };
 
   // Connect wallet method using Freighter

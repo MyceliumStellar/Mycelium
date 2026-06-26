@@ -109,10 +109,13 @@ class _Rpc:
         return _Page([])
 
 
-def _worker(events, resolve=None):
+def _worker(events, resolve=None, resolve_job=None):
     db = _FakeDb()
     rpc = _Rpc(events)
-    w = IndexerWorker(db, rpc, {"registry": "CREG", "job_board": "CBOARD"}, resolve_agent=resolve)
+    w = IndexerWorker(
+        db, rpc, {"registry": "CREG", "job_board": "CBOARD"},
+        resolve_agent=resolve, resolve_job=resolve_job,
+    )
     return w, db
 
 
@@ -145,6 +148,25 @@ def test_job_lifecycle_advances_status():
     assert job["bounty"] == 5_000_000
     assert job["agent"] == "GAGENT"
     assert job["status"] == "done"
+
+
+def test_job_posted_enriched_with_full_details():
+    events = [_Event("job_posted", [3, "GPOSTER", 7_000_000], 120, "120-0")]
+    calls = []
+
+    def resolve_job(job_id):
+        calls.append(job_id)
+        return {"token": "CTOKEN", "mode": "single", "escrow": "CESCROW", "deadline": 999}
+
+    w, db = _worker(events, resolve_job=resolve_job)
+    w.run_once(from_ledger=1)
+    job = db.store["jobs/3"]
+    assert calls == [3]                       # resolved once
+    assert job["escrow"] == "CESCROW"
+    assert job["deadline"] == 999
+    assert job["token"] == "CTOKEN"
+    assert job["mode"] == "single"
+    assert job["bounty"] == 7_000_000         # from the event
 
 
 def test_swarm_join_writes_member_and_share():
