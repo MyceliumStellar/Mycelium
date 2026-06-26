@@ -27,6 +27,7 @@ ESCROW_LOCKED = "escrow_locked"
 ESCROW_RELEASED = "escrow_released"
 ESCROW_SPLIT = "escrow_split"
 ESCROW_REFUNDED = "escrow_refunded"
+MEMORY_ANCHORED = "memory_anchored"
 
 # job lifecycle topic -> status string stored on the job doc.
 _JOB_STATUS = {
@@ -44,7 +45,7 @@ _SETTLEMENT_KIND = {
 }
 
 ALL_TOPICS = (
-    [AGENT_TOPIC, JOB_POSTED, SWARM_JOINED]
+    [AGENT_TOPIC, JOB_POSTED, SWARM_JOINED, MEMORY_ANCHORED]
     + list(_JOB_STATUS)
     + list(_SETTLEMENT_KIND)
 )
@@ -120,6 +121,14 @@ def normalize_event(event: Any, scval, stellar_xdr) -> Optional[Dict[str, Any]]:
         return {**base, "kind": "swarm", "job_id": job_id,
                 "agent": address_to_str(_pos(value, 1)),
                 "share_bps": _int(_pos(value, 2))}
+
+    if topic == MEMORY_ANCHORED:
+        # (owner, version) — see memory_anchor.py set_anchor emit.
+        owner = address_to_str(_pos(value, 0))
+        if owner is None:
+            return None
+        return {**base, "kind": "memory_anchor", "owner": owner,
+                "version": _int(_pos(value, 1))}
 
     if topic in _SETTLEMENT_KIND:
         settlement_kind = _SETTLEMENT_KIND[topic]

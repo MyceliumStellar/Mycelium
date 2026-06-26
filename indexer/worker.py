@@ -96,7 +96,7 @@ class IndexerWorker:
     # ── scanned contracts ───────────────────────────────────────────────────--
     def _scanned_contract_ids(self):
         ids = []
-        for key in ("registry", "job_board"):
+        for key in ("registry", "job_board", "memory_anchor"):
             if self.contract_ids.get(key):
                 ids.append(self.contract_ids[key])
         ids.extend(self.contract_ids.get("escrows", []) or [])
@@ -160,6 +160,8 @@ class IndexerWorker:
             self._upsert_swarm(rec)
         elif kind == "settlement":
             self._upsert_settlement(rec, index)
+        elif kind == "memory_anchor":
+            self._upsert_memory_anchor(rec)
 
     def _upsert_agent(self, rec: Dict[str, Any]) -> None:
         name = rec["name"]
@@ -221,6 +223,23 @@ class IndexerWorker:
                 {"share_bps": rec.get("share_bps")}, merge=True
             )
 
+    def _upsert_memory_anchor(self, rec: Dict[str, Any]) -> None:
+        # Latest anchor per agent → O(1) "where is this agent's memory + version".
+        # Monotonic version: only advance (events arrive oldest-first, but guard
+        # against re-ingest of an older one overwriting a newer).
+        ref = self.db.collection("memory_anchors").document(rec["owner"])
+        existing = ref.get()
+        prev = (existing.to_dict() or {}).get("version", 0) if getattr(existing, "exists", False) else 0
+        if (rec.get("version") or 0) >= prev:
+            ref.set(
+                {
+                    "owner": rec["owner"],
+                    "version": rec.get("version"),
+                    "last_anchor_ledger": rec.get("ledger"),
+                },
+                merge=True,
+            )
+
     def _upsert_settlement(self, rec: Dict[str, Any], index: int) -> None:
         doc_id = parsing.sanitize_doc_id(rec.get("event_id"), rec.get("ledger"), index)
         self.db.collection("settlements").document(doc_id).set(
@@ -238,7 +257,7 @@ class IndexerWorker:
 def build_default_worker(network: str = "testnet") -> IndexerWorker:
     """Wire a worker against the live RPC + Firestore using SDK defaults."""
     from mycelium_sdk import AgentContext, HiveClient
-    from mycelium_sdk.constants import HIVEMIND_REGISTRY_ADDRESS
+    from mycelium_sdk.constants import HIVEMIND_REGISTRY_ADDRESS, MEMORY_ANCHOR_ADDRESS
     from indexer.firestore_client import get_firestore
 
     ctx = AgentContext.read_only(network_type=network)
@@ -266,7 +285,11 @@ def build_default_worker(network: str = "testnet") -> IndexerWorker:
                 "deadline": j.get("deadline"),
             }
 
-    contracts = {"registry": HIVEMIND_REGISTRY_ADDRESS, "job_board": board}
+    contracts = {
+        "registry": HIVEMIND_REGISTRY_ADDRESS,
+        "job_board": board,
+        "memory_anchor": os.getenv("MYCELIUM_MEMORY_ANCHOR_ADDRESS") or MEMORY_ANCHOR_ADDRESS,
+    }
     return IndexerWorker(
         get_firestore(), ctx.soroban_rpc, contracts,
         resolve_agent=_resolve, resolve_job=resolve_job,

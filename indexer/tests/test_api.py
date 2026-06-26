@@ -44,6 +44,9 @@ class _FakeStore:
     def set_capability_tags(self, name, tags):
         self._agents.setdefault(name, {"name": name})["capability_tags"] = tags
 
+    def get_memory_anchor(self, owner):
+        return {"owner": owner, "version": 3, "last_anchor_ledger": 42} if owner == "GOWNER" else None
+
     def stats(self):
         return {"agents": 2, "jobs": 1, "settlements": 0, "volume_stroops": 0}
 
@@ -83,6 +86,13 @@ def test_list_and_get_jobs(client):
 
 def test_stats(client):
     assert client.get("/stats").json()["stats"]["agents"] == 2
+
+
+def test_memory_anchor_route(client):
+    r = client.get("/memory/GOWNER")
+    assert r.status_code == 200
+    assert r.json()["anchor"]["version"] == 3
+    assert client.get("/memory/NOBODY").status_code == 404
 
 
 def test_healthz(client):

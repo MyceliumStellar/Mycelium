@@ -182,6 +182,17 @@ def publish_capabilities(
     return {"ok": True, "name": name, "capability_tags": tags}
 
 
+@app.get("/memory/{owner}")
+def get_memory_anchor(owner: str, store=Depends(get_store)):
+    """Latest on-chain memory-anchor pointer (version + ledger) for an agent."""
+    anchor = store.get_memory_anchor(owner)
+    if anchor is None:
+        raise HTTPException(status_code=404, detail=f"No memory anchor indexed for '{owner}'.")
+    from mycelium_sdk.constants import MEMORY_ANCHOR_ADDRESS
+
+    return _envelope(store, MEMORY_ANCHOR_ADDRESS, anchor=anchor)
+
+
 @app.get("/stats")
 def stats(store=Depends(get_store)):
     return _envelope(store, None, stats=store.stats())

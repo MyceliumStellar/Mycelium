@@ -100,6 +100,11 @@ class FirestoreStore:
             job["members"] = members
         return job
 
+    def get_memory_anchor(self, owner: str) -> Optional[Dict[str, Any]]:
+        """Latest on-chain memory anchor (owner, version, ledger) for `owner`."""
+        snap = self.db.collection("memory_anchors").document(owner).get()
+        return (snap.to_dict() or {}) if getattr(snap, "exists", False) else None
+
     def stats(self) -> Dict[str, Any]:
         """Aggregate counts + settled volume for the business-model dashboard."""
         agents = sum(1 for _ in self.db.collection(AGENTS).stream())

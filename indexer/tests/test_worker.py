@@ -182,6 +182,19 @@ def test_swarm_join_writes_member_and_share():
     assert db.store["jobs/2/members/GMEM2"]["share_bps"] == 4000
 
 
+def test_memory_anchor_latest_version_per_owner():
+    events = [
+        _Event("memory_anchored", ["GOWNER", 1], 130, "130-0", "CANCHOR"),
+        _Event("memory_anchored", ["GOWNER", 2], 131, "131-0", "CANCHOR"),
+    ]
+    w, db = _worker(events)
+    counts = w.run_once(from_ledger=1)
+    assert counts["memory_anchor"] == 2
+    doc = db.store["memory_anchors/GOWNER"]
+    assert doc["version"] == 2                     # latest wins
+    assert doc["last_anchor_ledger"] == 131
+
+
 def test_settlement_recorded_by_event_id():
     events = [
         _Event("escrow_split", [2, 9_000_000], 113, "113-0", "CESCROW"),

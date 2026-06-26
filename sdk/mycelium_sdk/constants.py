@@ -14,6 +14,11 @@ endpoint (ide/backend/main.py).
 # `[registry].hive_registry_address` in mycelium.toml (e.g. for mainnet).
 HIVEMIND_REGISTRY_ADDRESS = "CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC"
 
+# MemoryAnchor contract (testnet) — the tiny on-chain commitment for an agent's
+# off-chain memory (`memory_anchor.py`). Override per deployment via
+# `[memory].anchor_address` in mycelium.toml.
+MEMORY_ANCHOR_ADDRESS = "CAC27VKJEPDJJNI36NP7D7VH6WCHT6N5EITKSKPZIQNWA2VPEPBIXJSB"
+
 # ─── Stellar / Soroban network endpoints ─────────────────────────────────────
 TESTNET = "testnet"
 MAINNET = "mainnet"
