@@ -74,13 +74,18 @@ class Escrow:
     def claim_funds(self, proof: Bytes) -> Bool:
         """
         Release the locked funds to the provider. `proof` must hash (SHA-256) to
-        the agreed `task_hash`. Reverts if uninitialized, already settled, or the
-        proof is invalid.
+        the agreed `task_hash`. The depositor (who locked the funds) must
+        authorize the release. Reverts if uninitialized, already settled,
+        unauthorized, or the proof is invalid.
         """
         if not self.storage.get("init", False):
             raise ContractError.NOT_INITIALIZED
         if self.storage.get("settled", False):
             raise ContractError.ALREADY_SETTLED
+
+        depositor = self.storage.get("depositor")
+        depositor.require_auth()
+
         if self.env.crypto().sha256(proof) != self.storage.get("task_hash"):
             raise ContractError.INVALID_PROOF
 
@@ -106,13 +111,22 @@ class Escrow:
         (SHA-256) to the agreed `task_hash`. The two vectors must be the same
         length and the amounts must sum to the locked amount. Powers the
         Sovereign Job Boards multi-agent bounty split (`EscrowPaymentRouter.
-        split_release`). Reverts if uninitialized, already settled, the proof is
-        invalid, or the split does not balance.
+        split_release`).
+
+        The depositor (who locked the funds) must authorize the release. Without
+        this, any observer of the public proof could call this with their own
+        `recipients` and redirect the bounty. Reverts if uninitialized, already
+        settled, unauthorized, the proof is invalid, or the split does not
+        balance.
         """
         if not self.storage.get("init", False):
             raise ContractError.NOT_INITIALIZED
         if self.storage.get("settled", False):
             raise ContractError.ALREADY_SETTLED
+
+        depositor = self.storage.get("depositor")
+        depositor.require_auth()
+
         if self.env.crypto().sha256(proof) != self.storage.get("task_hash"):
             raise ContractError.INVALID_PROOF
 

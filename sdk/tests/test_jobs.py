@@ -85,6 +85,18 @@ def test_join_swarm_marshals_share():
     assert share.type == scval.to_uint32(4000).type
 
 
+def test_submit_proof_marshals_submitter():
+    ctx = _FakeContext()
+    JobBoardClient(ctx, BOARD).submit_proof(5, b"proof-bytes")
+    call = [c for c in ctx.calls if c["function"] == "submit_proof"][0]
+    submitter, job_id, proof = call["args"]
+    # the wallet keypair signs as the claimant — contract gates on submitter auth
+    assert submitter == ctx.keypair.public_key
+    assert proof == b"proof-bytes"
+    from stellar_sdk import scval
+    assert scval.to_native(job_id) == 5
+
+
 def test_finalize_single_pays_claimant(monkeypatch):
     ctx = _FakeContext()
     ctx.reads["get_job"] = {

@@ -143,11 +143,15 @@ class JobBoardClient:
 
     # ── completion ───────────────────────────────────────────────────────────
     def submit_proof(self, job_id: int, proof: bytes):
-        """Record a completion proof whose SHA-256 matches the job's spec_hash."""
+        """
+        Record a completion proof whose SHA-256 matches the job's spec_hash.
+        Signed by the wallet keypair, which must be the recorded claimant (the
+        single-mode agent or a swarm member) — the contract enforces this.
+        """
         return self.context.call_contract(
             contract_id=self.board_address,
             function_name="submit_proof",
-            args=[u64(job_id), proof],
+            args=[self.context.keypair.public_key, u64(job_id), proof],
         )
 
     def finalize(self, job_id: int, proof: bytes):
@@ -155,7 +159,8 @@ class JobBoardClient:
         Release the bounty and mark the job done. For a single-agent job the full
         bounty goes to the claimant; for a swarm it is split across members per
         their recorded shares (`EscrowPaymentRouter.split_release`). `proof` must
-        SHA-256 to the job's spec_hash.
+        SHA-256 to the job's spec_hash. The contract `finalize` requires the
+        poster's auth, so the wallet keypair must be the job's poster.
         """
         job = self.get_job(job_id)
         escrow_id = job["escrow"]

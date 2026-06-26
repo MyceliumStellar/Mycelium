@@ -35,6 +35,7 @@ class ContractError:
     INVALID_PROOF = 4
     NOT_SUBMITTED = 5
     BAD_SHARE = 6
+    NOT_CLAIMANT = 7
 
 
 @contract
@@ -131,9 +132,33 @@ class JobBoard:
         return True
 
     @external
-    def submit_proof(self, job_id: U64, proof: Bytes) -> Bool:
-        """Record a completion proof whose SHA-256 matches the job's spec_hash."""
+    def submit_proof(self, submitter: Address, job_id: U64, proof: Bytes) -> Bool:
+        """
+        Record a completion proof whose SHA-256 matches the job's spec_hash.
+
+        Only the recorded claimant may submit: the single-mode `agent:` or a
+        swarm `members:` entry. The proof must stay secret until this call —
+        publishing it on-chain is what authorizes escrow release, so an
+        unauthorized submitter must never be able to record it.
+        """
+        submitter.require_auth()
         jid = str(job_id)
+
+        mode = self.storage.get("mode:" + jid, Symbol("single"))
+        if mode == Symbol("swarm"):
+            members = self.storage.get("members:" + jid, Vec())
+            is_member = False
+            n = len(members)
+            for i in range(n):
+                if members[i] == submitter:
+                    is_member = True
+            if not is_member:
+                raise ContractError.NOT_CLAIMANT
+        else:
+            agent = self.storage.get("agent:" + jid, self.storage.get("poster:" + jid))
+            if agent != submitter:
+                raise ContractError.NOT_CLAIMANT
+
         if self.env.crypto().sha256(proof) != self.storage.get("spec_hash:" + jid):
             raise ContractError.INVALID_PROOF
         self.storage.set("proof:" + jid, proof)
@@ -146,9 +171,11 @@ class JobBoard:
         """
         Mark a submitted job complete. The SDK releases the escrow (single payout
         or N-way swarm split) around this call. Reverts unless a proof was
-        submitted.
+        submitted. Only the poster (who locked the bounty) may release.
         """
         jid = str(job_id)
+        poster = self.storage.get("poster:" + jid)
+        poster.require_auth()
         if self.storage.get("status:" + jid, Symbol("none")) != Symbol("submitted"):
             raise ContractError.NOT_SUBMITTED
         self.storage.set("status:" + jid, Symbol("done"))
