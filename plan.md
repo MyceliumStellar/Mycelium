@@ -1,162 +1,167 @@
-# Mycelium: CLI-free Toolchain, In-IDE Agent Creation & Sovereign Job Boards
+# Mycelium — Pre-Mainnet Hardening & Build Plan
 
 ## Context
 
-Three connected goals:
+Mycelium ships v0.2.0 today: a Python→Soroban compiler, SDK, 18-command CLI, Web IDE, on-chain Hive Registry, x402 escrow, and Sovereign Job Boards — all validated end-to-end on **testnet**. The next step is a **mainnet shift** (after grant funding), and before it everything that assumes testnet, every money-path correctness gap, and every security-sensitive surface must be closed. In parallel, two scaling pillars must be **built before the grant pitch** (per `vision/`): the **off-chain indexer** (makes discovery O(1) — the headline scaling proof) and **persistent agent memory** (off-chain memory + tiny on-chain anchor).
 
-1. **Remove the hard `stellar-cli` dependency.** Today the CLI, SDK, and IDE backend all shell out to the pinned `stellar` binary (auto-downloaded via `ensure_stellar_cli()`) for two operations: `contract build` (compile → WASM, also needs a Rust toolchain) and `contract deploy`. A new user can't deploy/compile without that toolchain landing on their machine. We want the CLI + SDK to work end-to-end with **zero local stellar-cli / Rust install**.
+This plan was produced after auditing the live code. The audit confirmed a **mainnet-blocking authorization bug** in the JobBoard contract (`submit_proof` + `finalize` have no `require_auth()`), a **weak shared-key encryption** scheme in the IDE backend (`get_fernet_key` null-pads `JWT_SECRET_KEY`), **unauthenticated** `/api/deploy` and `/compile` endpoints, money-path **validation gaps**, and **testnet hardcodes**. Indexer/memory architecture is designed in `vision/01-offchain-indexer.md` and `vision/02-persistent-agent-memory.md`; this plan turns them into build steps and sequences them with the hardening.
 
-2. **In-IDE agent creation.** The `/agent` route's "Add" button currently only *resolves* existing on-chain agents. We want it to *create* one: a wizard collecting the same inputs as `mycelium init` (project name, provider, API key, model, unique name), scaffolding a new GitHub repo, then opening the playground in an **"agent creation mode"** where the user writes code, compiles, deploys, and registers — all in-browser.
+**Decisions locked with the user:**
+- Indexer datastore: **Firestore** (not Postgres, not RTDB) — stays in the existing Firebase ecosystem, supports compound queries + `array-contains` for capability tags + real pagination, reuses the Firebase Admin setup already in `ide/backend`. RTDB can't do compound capability+reputation filters server-side.
+- Indexer access: **hosted-first** — Mycelium runs one indexer; SDK/CLI/IDE point at its URL over HTTP (mirrors how `mycelium compile` defaults to the hosted `/compile` backend). Self-hosting stays possible for sovereign users. SDK falls back to the on-chain event-scan when the indexer is unreachable.
+- Sequencing: indexer + memory + **most hardening land before the grant pitch**; the actual mainnet cutover (network defaults, mainnet smoke tests) follows funding.
 
-3. **Roadmap: Sovereign Job Boards.** Post a task on-chain; single agents or multi-agent swarms claim, coordinate, execute, and split bounties via x402 payments. Full contract + SDK + CLI + UI design with phased milestones.
-
-Key facts from exploration:
-- Everything except `build` and `deploy` is **already pure-Python** via `stellar_sdk` (`sdk/mycelium_sdk/context.py`).
-- The **frontend playground already deploys with pure-JS stellar-sdk** (`uploadContractWasm` + `createCustomContract` + Freighter) — proving deploy needs no binary. We mirror that in Python.
-- The IDE backend already has a hosted `/compile` (Docker/`mycelium-compiler:latest`) at `ide/backend/main.py:362`.
-- ⚠️ The frontend is a **non-standard Next.js** — per `ide/frontend/AGENTS.md`, read `node_modules/next/dist/docs/` before writing any frontend code.
+**Intended outcome:** a Mycelium that (a) demonstrates million-agent scale via a working hosted indexer + memory anchoring for the pitch, and (b) is safe to point at mainnet — no unauthorized fund release, no weak secrets, no testnet-only assumptions in money paths.
 
 ---
 
-## Part 1 — Remove the local stellar-cli requirement
+## Priority 0 — BLOCKING security fix: JobBoard authorization (do first)
 
-### 1a. Pure-Python deploy (eliminates the binary for deploy/register/escrow)
+**Problem (confirmed in `job_board_contract.py`):**
+- `submit_proof(job_id, proof)` (lines 133-142) — **no `require_auth()`**. Any unsigned caller can record a valid proof on any job.
+- `finalize(job_id)` (lines 145-156) — **no `require_auth()`**. Any caller can finalize, and `JobBoardClient.finalize` (`sdk/mycelium_sdk/jobs.py:153`) then calls `EscrowPaymentRouter.split_release` to disburse the bounty.
 
-Replace every `stellar contract deploy` subprocess with a `stellar_sdk` transaction that does **upload WASM hash** then **create contract**, signed with the wallet keypair already loaded in `AgentContext`.
+Combined, an unauthorized actor can drive a job to escrow release. The escrow itself is sound (`escrow_contract.py` gates `claim_funds`/`claim_and_split` on the secret proof preimage), but the JobBoard records the proof on-chain without auth, defeating the secrecy assumption.
 
-**New helper** — add `deploy_contract()` to `sdk/mycelium_sdk/context.py` as an `AgentContext` method (reuses `self.soroban_rpc`, `self.keypair`, `self.network_passphrase`, and the existing retry/poll helpers in `mycelium_sdk/rpc.py`):
-- Build tx with `TransactionBuilder(...).append_upload_contract_wasm_op(contract=wasm_bytes)`, `prepare_transaction`, sign, submit, poll → extract WASM hash from the settled meta (reuse the `_decode_tx_result` pattern at `context.py:399`).
-- Build second tx with `.append_create_contract_op(wasm_id=wasm_hash, address=self.keypair.public_key)`, prepare/sign/submit/poll → derive the contract id.
-- Mirror the polling/`with_retry` logic already in `call_contract` (`context.py:315-336`).
+**Fix (in `job_board_contract.py`):**
+1. `submit_proof` — add `submitter: Address` param, `submitter.require_auth()`, assert submitter is the recorded `agent:` (single) or in `members:` (swarm); else revert (new `ContractError.NOT_CLAIMANT`).
+2. `finalize` — load `poster:` from storage and `poster.require_auth()` (mirror `assign_agent` at lines 95-99). The party releasing funds must authorize.
+3. Document: proofs must stay secret until `submit_proof`; only the claimant may submit.
 
-This is the single source of truth; the three call sites below delegate to it.
+**Propagation:**
+- `sdk/mycelium_sdk/jobs.py` — pass the new auth address in `submit_proof`/`finalize` (finalize already loads the job → has `poster`/`agent`).
+- `cli/mycelium_cli/commands/jobs.py` — `mycelium job submit`/`finalize` use the wallet keypair.
+- Recompile `job_board.wasm` with `mycelium-compiler:latest`, redeploy to testnet, update `mycelium.toml [jobs].board_address`. (v0.1.0 escrow instances unaffected.)
+- Tests: extend `sdk/tests/test_jobs.py` — unauthorized `submit_proof`/`finalize` rejected; happy path still settles. Add to `test_live_testnet.py`.
 
-**Refactor call sites to drop `ensure_stellar_cli()` + `subprocess`:**
-- `cli/mycelium_cli/commands/deploy.py:116-129` — replace the subprocess block with `AgentContext(wallet_path, network, passphrase).deploy_contract(wasm_bytes)`. Keep the existing balance-check / Friendbot funding (`deploy.py:103-114`) and the `mycelium.toml` write-back (`deploy.py:132-138`).
-- `sdk/mycelium_sdk/x402/settlement.py:97-118` (`_deploy_escrow_instance`) — replace with `self.context.deploy_contract(escrow_wasm_bytes)`.
-- `ide/backend/main.py:382-469` (`/api/deploy`) — replace subprocess with the Python deploy path (load `stellar_sdk` directly; keep the generate-and-Friendbot-fund branch at `main.py:408-427`).
-
-### 1b. Hosted compile (eliminates Rust + stellar-cli for `build`)
-
-`contract build` genuinely needs the Rust/WASM toolchain, so move it server-side instead of onto the user's machine.
-
-- **CLI**: add a `--remote` path (and make it the default when no local toolchain is detected) to `cli/mycelium_cli/commands/compile.py`. It POSTs `{filename, source_code}` to the IDE backend `/compile` endpoint (`ide/backend/main.py:362`) and writes the returned base64 WASM to `build/contract.wasm`. Local compile stays available via an explicit `--local` flag for users who *do* have the toolchain.
-- Add a config/env knob (e.g. `MYCELIUM_COMPILE_URL`, default to the hosted backend) so self-hosters can point elsewhere.
-- The hosted `/compile` already runs the compiler in Docker (`mycelium-compiler:latest`) which bundles stellar-cli — no change needed there beyond confirming it's reachable.
-
-### 1c. Doctor + docs
-
-- `cli/mycelium_cli/commands/doctor.py` — demote the stellar-cli / Rust / wasm-target checks (`_check_stellar_cli`, etc.) from hard failures to **optional "local compile" capability** notes; add a check that the remote compile + RPC endpoints are reachable. The default happy path must pass with neither Rust nor stellar-cli installed.
-- Update `cli.md`, `sdk.md`, `README.md`, `docs/compiler.md` to describe the zero-toolchain default and the optional local path.
-
-### Verification (Part 1)
-- In a clean venv with **no Rust and no stellar binary on PATH**: `mycelium init demo && mycelium newwallet && mycelium compile && mycelium deploy --network testnet && mycelium register`. Expect a real testnet contract id + Hive registration tx, no binary download.
-- `pytest cli/tests sdk/tests` — update/extend deploy tests to assert the Python path (mock `SorobanServer`).
-- Confirm escrow deploy via an x402 flow (`a2a_demo.py` or an SDK test) still returns a live escrow id.
+**Verification:** on testnet, post + claim with agent A; `submit_proof`/`finalize` signed by an unrelated key must fail; signed by claimant/poster must succeed and settle.
 
 ---
 
-## Part 2 — In-IDE Agent Creation (`/agent` → wizard → playground creation mode)
+## Priority 1 — Off-chain Indexer (Firestore, hosted; build before the pitch)
 
-### 2a. Wizard on the `/agent` "Add" button
-`ide/frontend/src/app/agent/page.tsx` — the current search form (`page.tsx:533-575`) keeps its resolve behavior, but add a distinct **"+ Create Agent"** button opening a multi-step modal that mirrors `mycelium init` (`cli/mycelium_cli/commands/init.py`):
+Design in `vision/01-offchain-indexer.md`. Chain stays source-of-truth; the indexer is a verifiable cache that turns discovery from an O(N), retention-bounded event-scan (`sdk/mycelium_sdk/hive.py:93` `discover_agents`) into an O(1) searchable lookup over full history. **No new on-chain code** — contracts already emit `agent_registered`, the `job_*` events, `swarm_joined`, and escrow `escrow_locked/released/split/refunded`.
 
-1. **Project / unique name** — validate against `^[a-zA-Z0-9_]{3,30}$` (same regex as `init.py:18`).
-2. **Provider** — `langgraph | gemini | anthropic | openai | ollama | custom` (`VALID_FRAMEWORKS`).
-3. **API key** (for cloud providers) — used for live model discovery.
-4. **Model** — fetched from the provider's catalogue. Reuse the discovery logic in `sdk/mycelium_sdk/models.py` via a **new backend proxy endpoint** `POST /api/models` (avoids exposing the API key in the browser / CORS issues), mirroring `init.py:_select_model`.
+**Build steps:**
+1. **Extract shared event logic** — lift the `getEvents` paging loop + `_parse_registration_event` from `sdk/mycelium_sdk/hive.py` into a new `sdk/mycelium_sdk/events.py` (cursor-aware, generic over topic), reused by both SDK and the indexer worker. Reuse `mycelium_sdk.rpc.with_retry` for transient RPC errors.
+2. **New `indexer/` package** (sibling to `sdk/`, `cli/`), **co-located with the existing FastAPI IDE backend so it reuses the Firebase Admin SDK already initialized in `ide/backend`**:
+   - `indexer/worker.py` — cursor-tracked ingest loop. Stores the `(last_ledger, last_event_id)` cursor in a Firestore doc; calls `getEvents` from the cursor forward; idempotent upserts keyed on event id `(ledger, tx_index, event_index)` as the Firestore document id (re-ingest = overwrite, safe). One `resolve_agent` sim per newly-seen name, then cached. Backfill mode `--from-ledger N`.
+   - **Firestore collections** (replacing the Postgres schema in `vision/01` §3b):
+     - `agents/{name}` → `{address, capability_tags[], endpoint, model, role, description, reputation, first_seen_ledger, last_update_ledger}`. Capability search via Firestore `array-contains` on `capability_tags`; reputation/status via composite indexes (declare them in `firestore.indexes.json`).
+     - `jobs/{job_id}` → `{poster, bounty, token, mode, status, escrow, deadline, spec_hash, posted_ledger}`. Query by `status`/`mode`/`min_bounty`.
+     - `jobs/{job_id}/members/{agent}` (subcollection) → `{share_bps}`.
+     - `settlements/{event_id}` → `{escrow, job_id, amount, token, kind, ledger}` (volume metrics → business-model dashboard in `vision/03`).
+     - `indexer_meta/cursor` → `{last_ledger, last_event_id}`.
+   - `indexer/api.py` — FastAPI read API (new routes on the existing backend app or a sibling service): `GET /agents` (capability + min_reputation filters, Firestore cursor pagination via `start_after`), `/agents/{name}`, `/jobs`, `/jobs/{id}`, `/stats`. Each response carries `source_contract` + `as_of_ledger` for client-side verification. Reuses auth/CORS/Firebase patterns from `ide/backend/main.py`.
+3. **Capability search** — start with **Option A** (no contract change): the SDK already knows plaintext tags (`HiveClient._compute_capability_hash`, `hive.py:252`); have `register` also publish the tag list (in the event payload or to the agent endpoint) so the worker stores `capability_tags[]` for `array-contains`. (Option B — a `capabilities` event topic in the DSL — is a later, backward-compatible enhancement.)
+4. **SDK integration** — `HiveClient.__init__` gains `indexer_url` (default = hosted Mycelium indexer, like `DEFAULT_COMPILE_URL` in `constants.py:46`); `discover_agents(prefer_indexer=True)` tries the indexer HTTP path, falls back to the on-chain event-scan on failure. Add `verify=True` to re-`resolve_agent` returned names on-chain (DB speed, chain trust).
+5. **CLI** — `mycelium agents`/`discover` (`cli/mycelium_cli/commands/discover.py`) uses the hosted indexer when reachable (instant), falls back to event-scan offline.
+6. **IDE** — wire the `/jobs` route + agent feed to the read API instead of raw event scans.
 
-Requires GitHub OAuth (reuse the playground's existing JWT/login flow); if not logged in, the wizard triggers login first.
+**Access model:** the SDK/CLI default to the **hosted** indexer URL; no download required. Advanced users can run `indexer/worker.py` + `indexer/api.py` against their own Firebase project and override the URL (sovereign/decentralized path).
 
-### 2b. Backend scaffold endpoint
-Add `POST /api/agents/scaffold` to `ide/backend/main.py` (auth-gated via `get_current_user_session`):
-- Create the repo by reusing the existing `create_repository` logic (`main.py:243`).
-- Commit the scaffolded files using the existing `commit_repo_file` logic (`main.py:322`): `mycelium.toml`, `agent.py`, `contract.py`, `.gitignore`, `README.md` — generated by **reusing the templates in `cli/mycelium_cli/commands/init.py`** (`_build_config`, contract/agent templates). Factor those templates into a shared helper importable by both CLI and backend so they don't drift.
-- **API key handling**: do *not* commit `.env` to GitHub. Store the provider key encrypted (reuse `encrypt_token` / Firebase `user_credentials`, `main.py:177`) and inject it at run/deploy time, OR collect it again at deploy time. (Decide during implementation; default = encrypted server-side, never in the repo.)
-- Wallet: generate the encrypted wallet via the existing `crypto` helpers; surface the public key. The encrypted `wallet.json` can live in the repo (it's encrypted at rest, matching CLI behavior) — passphrase is never stored.
-
-### 2c. Playground "agent creation mode"
-`ide/frontend/src/app/playground/page.tsx` — accept a query param (e.g. `?repo=<name>&mode=create`) that:
-- Auto-loads the scaffolded repo's files.
-- Surfaces a guided rail/checklist: **Write → Compile → Deploy → Register**, reusing the existing client-side compile (`/compile`) and Freighter deploy pipeline (`playground/page.tsx:1176-1408`).
-- After deploy, a **Register** step invokes `register_agent` on the Hive Registry contract (`REGISTRY_ADDRESS` in `agent/page.tsx`) client-side via stellar-sdk + Freighter, writing `unique_name`, capabilities, endpoint, model, role (mirrors `cli/.../register.py` → `HiveClient.register`). On success, route back to `/agent` and the new node appears via existing on-chain discovery.
-
-### Verification (Part 2)
-- Logged-in user clicks "Create Agent", completes the wizard → a new private GitHub repo appears with the scaffold; playground opens in creation mode.
-- Compile → deploy (Freighter, testnet) → register succeeds; the agent shows up on `/agent` after discovery.
-- Confirm no `.env`/plaintext key is committed to the repo.
+**Verification:** register agents on testnet → appear via `GET /agents?capability=...` instantly; wipe the Firestore collections + re-backfill → identical state; kill the worker mid-run → restart resumes from the cursor doc with no dupes; `discover_agents` with the indexer URL down → falls back to event-scan and still returns agents.
 
 ---
 
-## Part 3 — Sovereign Job Boards (full design + phased build)
+## Priority 2 — Persistent Agent Memory (build before the pitch)
 
-### Architecture
-```
-Poster ──post_job(spec_hash, bounty, mode)──► JobBoard contract ──locks bounty──► Escrow (x402)
-                                                     │
-        Agents ──claim_job / join_swarm──────────────┤
-                                                     │
-   Swarm coordinates off-chain (A2A) ─► submit_proof ─► JobBoard verifies ─► split bounty via EscrowPaymentRouter
-```
+Design in `vision/02-persistent-agent-memory.md`. **Memory stays off-chain; only a tiny commitment goes on-chain.** Per-agent on-chain footprint is constant and tiny regardless of memory size.
 
-### 3a. On-chain `JobBoard` contract (`job_board_contract.py`, Mycelium DSL)
-State + externals (DSL types per `contract.py` template):
-- `post_job(spec_uri, spec_hash, bounty_amount, token, mode)` where `mode ∈ {single, swarm}`; locks the bounty into an escrow instance (reuse `escrow_contract.py` / `EscrowPaymentRouter.create_locked_escrow`).
-- `claim_job(job_id)` (single, agent self-claims) / `assign_agent(job_id, agent)` (poster designates a specific agent) / `join_swarm(job_id, capability_tag, share_bps)` (swarm) — records claimants and agreed bounty shares (basis points, must sum to 10000).
-- `submit_proof(job_id, proof)` — proof must SHA-256 to `spec_hash` (matches escrow `claim_funds` semantics at `escrow_contract.py`).
-- `finalize(job_id)` — releases the escrow and **splits the bounty across swarm members per their shares** via x402.
-- `cancel_job` / `expire` — refund path after deadline (reuse escrow `refund`).
-- Emits `job_posted`, `job_claimed`, `swarm_joined`, `job_completed` events (so the off-chain indexer + `/agent` UI can discover jobs, mirroring existing `agent_registered` discovery).
+**Build steps:**
+1. **`memory_anchor.py`** (root, Mycelium DSL — mirrors `hive_registry.py`): `set_anchor(owner, memory_root, uri, acl)` with `owner.require_auth()` + monotonic `version`; `get_anchor(owner) -> Map`. Emits `memory_anchored {owner, version}` (the indexer indexes "latest anchor per agent"). Reuses only v0.1.0 DSL primitives (`require_auth`, `Bytes`, events, storage keys) — no compiler changes. Compile, deploy to testnet, record id.
+2. **`sdk/mycelium_sdk/memory/`** — new subpackage behind one interface `AgentMemory(ctx, backend="auto")`:
+   - `remember(content, tags)` / `recall(query, k)` — off-chain, no chain tx.
+   - `anchor()` — compute `memory_root` (flat content hash to start; Merkle root is a v2 enhancement), call `set_anchor` on-chain.
+   - `rehydrate()` / `verify()` — read anchor → fetch blob from `uri` → recompute hash → compare to `memory_root`; reject on mismatch; honor `version` for rollback protection.
+   - `LocalVectorBackend` — SQLite + a small local embedding model (zero-dependency, offline, OSS default).
+   - `SupermemoryBackend` — Supermemory keyed by the agent's `G-address` as `containerTag` (ROADMAP §4); the managed/cloud path (revenue surface in `vision/03`).
+3. **Anchoring policy hooks** — anchor at job-completion + periodic heartbeat (the cost knob), not per-write.
+4. **CLI (optional)** — `mycelium memory anchor` / `verify`.
 
-### 3b. SDK layer (`sdk/mycelium_sdk/jobs.py`)
-- `JobBoardClient(context, board_address)` with `post_job`, `claim_job`, `assign_agent`, `join_swarm`, `submit_proof`, `finalize`, `list_open_jobs` (read-only sim via `call_contract(read_only=True)`).
-- **Multi-agent split**: extend `EscrowPaymentRouter` to support N-way release (`split_release(escrow_id, [(provider, share_bps)...])`) so bounties divide across a swarm; build on the existing single-provider `release_funds` (`settlement.py:75`).
-- Swarm coordination uses the existing A2A primitives (`a2a_demo.py`, `hive_registry.py` discovery) — agents find collaborators by capability tag in the Hive Registry, agree shares off-chain, then `join_swarm`.
-
-### 3c. CLI commands (`cli/mycelium_cli/commands/jobs.py`)
-Job Boards must be fully drivable from the CLI, not just the SDK/UI. Add a `mycelium job` command group (Typer sub-app registered in `cli/mycelium_cli/main.py`) that thin-wraps `JobBoardClient`, reusing wallet load + passphrase resolution (`_resolve_passphrase` in `main.py`) exactly like `deploy`/`register`:
-- `mycelium job post --spec <file|uri> --bounty <xlm> --mode single|swarm [--token <addr>] [--deadline <secs>]` — hashes the spec, locks the bounty escrow, prints the new `job_id`.
-- `mycelium job list [--status open|claimed|done]` — read-only sim listing jobs (via `list_open_jobs`).
-- `mycelium job claim <job_id>` — single-agent self-claim.
-- `mycelium job assign <job_id> --agent <unique_name|address>` — **poster-side**: assign a specific agent to a job (resolves the agent via Hive Registry, then records the assignment on-chain via `assign_agent`).
-- `mycelium job join <job_id> --capability <tag> --share <bps>` — join a swarm with an agreed share.
-- `mycelium job submit <job_id> --proof <file>` — submit the completion proof.
-- `mycelium job finalize <job_id>` — release + split the bounty.
-- `mycelium job status <job_id>` — show claimants, swarm shares, escrow state.
-- Network/wallet flags mirror `deploy`/`register`; board address defaults from `mycelium.toml` (`[jobs].board_address`) with a flag override.
-
-### 3d. UI
-- New `/jobs` route (frontend): list open jobs (from indexer/events), "Post a Job" form (spec, bounty, single/swarm), and a job detail view showing claimants, swarm shares, and status.
-- Surface "available jobs" to agents on `/agent`.
-
-### 3e. Phased milestones
-1. **M1 — Escrow groundwork**: finish `escrow_contract.py` + `EscrowPaymentRouter` single-provider path (already partially present; ROADMAP §6.1). Add N-way `split_release`.
-2. **M2 — JobBoard contract + CLI**: author + compile `job_board_contract.py` (incl. `assign_agent`); ship the `mycelium job` command group (3c); single-agent post→assign/claim→proof→finalize end-to-end on testnet via CLI.
-3. **M3 — Swarm mode**: `join_swarm` + share accounting + multi-way bounty split; A2A coordination demo extending `a2a_demo.py`.
-4. **M4 — Indexer + UI**: off-chain event indexer for jobs (ties into ROADMAP §5 "Off-Chain Indexer"); `/jobs` route + agent-facing job feed.
-
-### Verification (Part 3)
-- Unit tests for `JobBoardClient` and `split_release` (mock RPC).
-- CLI E2E (testnet): `mycelium job post` → `mycelium job assign --agent <name>` → `mycelium job submit --proof` → `mycelium job finalize`, asserting the bounty lands in the assigned agent's wallet.
-- Swarm E2E: post a swarm job, two test agents `join_swarm` with 60/40 shares, submit valid proof, `finalize` → confirm both wallets receive the correct split.
+**Verification:** portability demo — write+anchor on machine A; on machine B `rehydrate()` reads the anchor, fetches, verifies the root, resumes; tamper the blob → `verify()` returns false. (Doubles as a strong pitch demo for stateless/serverless agents.)
 
 ---
 
-## ROADMAP.md updates
-Add to `ROADMAP.md`:
-- New **"Zero-Toolchain Operation"** entry under shipped/§2 (pure-Python deploy + hosted compile).
-- New **"In-IDE Agent Creation"** entry under §2 Web IDE extensions.
-- New top-level **"💼 Sovereign Job Boards"** section with the M1–M4 phasing above, cross-referencing §6.1 (escrow) and §5 (indexer).
+## Priority 3 — Money-path validation hardening (do alongside P1/P2)
+
+Close input-validation gaps in fund paths (defense-in-depth; escrow re-validates on-chain, but reject early with clear errors).
+
+- `sdk/mycelium_sdk/x402/settlement.py` `create_locked_escrow` — reject `amount_xlm <= 0` and amounts above the i128 ceiling before stroop conversion.
+- `sdk/mycelium_sdk/jobs.py` `post_job` — reject `bounty_xlm <= 0`.
+- `split_release` (settlement.py) — already checks `sum(bps)==10000`; also reject any `bps <= 0` and empty share lists.
+- `join_swarm` SDK path / `mycelium job join` — validate `0 < share_bps <= 10000` client-side (contract checks only the upper bound, line 119).
+- `list_open_jobs` (`jobs.py:244`) silently `continue`s on any error — keep for read-only discovery but log at debug so failures aren't invisible.
+
+**Verification:** unit tests in `test_x402.py`/`test_jobs.py` asserting each rejection raises a clear `ValueError`; happy path unchanged.
 
 ---
 
-## Suggested implementation order
-1. Part 1a (pure-Python deploy) — unblocks everything, smallest blast radius.
-2. Part 1b/1c (hosted compile + doctor/docs).
-3. Part 2 (agent creation wizard) — depends on 1 being solid for in-browser deploy/register UX.
-4. Part 3 (Job Boards) — M1→M4, largest, builds on the escrow + registry foundations.
+## Priority 4 — IDE backend security hardening
 
-## Notes / caveats
-- Frontend: **read `ide/frontend/node_modules/next/dist/docs/` before writing any Next.js code** (`AGENTS.md` warns the framework diverges from standard Next.js).
-- Verify `stellar_sdk` version in use exposes `append_upload_contract_wasm_op` / `append_create_contract_op` (the pinned `stellar-sdk>=12,<13` per `context.py:71` does); adjust op names if the API differs.
-- Keep `ensure_stellar_cli()` available for opt-in local compile, but it must no longer be on any default path.
+The IDE backend is the most exposed surface and the weakest link for mainnet.
+
+1. **Replace weak token encryption** — `ide/backend/auth/security.py:24-27` derives the Fernet key by null-padding `JWT_SECRET_KEY` (shared, no salt, no rotation): if `JWT_SECRET_KEY` leaks, all stored GitHub tokens + user API keys decrypt. Use a dedicated `TOKEN_ENCRYPTION_KEY` (independent of JWT) with proper HKDF derivation, or per-record envelope encryption. Re-encrypt existing `user_credentials` on next login.
+2. **Authenticate money/compute endpoints** — `POST /api/deploy` (accepts a `secret_key` in the body; can fund+deploy) and `POST /compile` are unauthenticated. Gate both behind `get_current_user_session` (already used by `/api/agents/scaffold`); add per-user rate limiting on `/compile`. Prefer encrypted-wallet uploads over raw `secret_key` in the body for any mainnet deploy path.
+3. **Secrets in transit** — `/api/agents/scaffold` and `/api/deploy` take a passphrase/secret in the body: document HTTPS-only, confirm prod TLS, never log request bodies on these routes.
+4. **CORS** — tighten `allow_methods=["*"]` (`main.py:37`) to methods actually used; keep the origin whitelist; make the localhost origin dev-only via env.
+
+**Verification:** unauthenticated `POST /api/deploy` / `/compile` → 401; token re-encryption round-trips with the new key; rotating `JWT_SECRET_KEY` no longer invalidates stored tokens.
+
+---
+
+## Priority 5 — Mainnet network-config hardening (gates the cutover; post-funding OK)
+
+Make mainnet a first-class, safe target. Most plumbing is already network-gated (`constants.py` has both RPC/Horizon/passphrase/SAC sets; `normalize_network()` enforces the switch); the gaps are defaults and guards.
+
+1. **Registry/board address per network** — `HIVEMIND_REGISTRY_ADDRESS` (`constants.py:15`) is testnet-only. Add a mainnet registry address once deployed; select by `network_type` (like `NATIVE_SAC_ADDRESSES`), keeping the `mycelium.toml [registry].hive_registry_address` override (`register.py:33`). Same convention for a mainnet JobBoard address.
+2. **Friendbot guard** — `FRIENDBOT_URL` (`constants.py:37`) and `mycelium fund` must hard-refuse on mainnet with a "pre-fund this address" message. Confirm `deploy.py:100-110` (testnet-only Friendbot, ≥5 XLM mainnet check) is the only auto-fund path.
+3. **Scaffold defaults** — `sdk/mycelium_sdk/scaffold.py` (lines 65, 109, 154) hardcodes `network_type="testnet"`; make generated `agent.py`/`mycelium.toml` read the target network so a mainnet project doesn't silently run on testnet.
+4. **Explicit-network guard** — `AgentContext.read_only`/`__init__` default to testnet (`context.py:85,118`); warn on first mainnet money op and require explicit `--network mainnet` on `deploy`/`pay`/`job`/`deal`.
+5. **Fee strategy** — `base_fee=100` is hardcoded (`context.py:271,505`); `prepare_transaction` adjusts, but add a configurable `base_fee` / fee-bump ceiling and a mainnet sanity floor so congested-network txns don't silently fail.
+
+**Verification:** mainnet-config project with an unfunded wallet → `fund` refuses, `deploy` refuses below 5 XLM; funded wallet → deploy+register hit the mainnet registry; scaffolded project reports `network=mainnet` end-to-end.
+
+---
+
+## Priority 6 — Test coverage & compiler-maturity gates (final pre-go-live)
+
+1. **Live mainnet smoke suite** — a gated suite (`MYCELIUM_MAINNET_TESTS=1`) mirroring `test_live_testnet.py` (register/resolve, escrow lock/claim, one job post→finalize) against mainnet with a pre-funded wallet. Run once before go-live, not in CI.
+2. **JobBoard auth regression tests** — from P0, permanent in `test_jobs.py`.
+3. **Compiler coverage truth** — run the full fixture set (`compiler/Benchmark` stress runner + the ~200/300 WASM fixtures from memory, pass rate ~129/300). Capture the actual failure list, categorize buckets (unsupported syntax / type gaps / codegen bugs), and **document known limitations** so users don't ship a contract that compiles in one path and traps in another (the v0.2.0 escrow `initialize` trap is the cautionary example). Documentation + triage, not a full compiler push.
+
+**Verification:** mainnet smoke suite passes once; compiler-limitations doc lists failing buckets with reproduction.
+
+---
+
+## Suggested execution order
+
+1. **P0** — JobBoard auth fix (blocking; smallest, highest risk-reduction). Recompile + redeploy + tests.
+2. **P1** — Indexer on Firestore (pre-pitch headline; extract `events.py` first → worker → API → SDK/CLI/IDE wiring).
+3. **P2** — Agent memory (pre-pitch; `memory_anchor.py` → `AgentMemory` + local backend → Supermemory → portability demo).
+4. **P3** — Money-path validation (cheap; alongside P1/P2).
+5. **P4** — IDE backend security (before any mainnet deploy through the IDE).
+6. **P5** — Network-config hardening (gates the mainnet switch; post-funding OK).
+7. **P6** — Test/compiler gates (final pre-go-live).
+
+P0, P3, P4 are **mainnet blockers**. P1, P2 are **pitch deliverables** (P1's `settlements` collection powers the `vision/03` volume dashboard). P5/P6 gate the actual cutover.
+
+## Critical files (by area)
+
+- **Contracts:** `job_board_contract.py` (auth), new `memory_anchor.py`; recompile via `mycelium-compiler:latest`.
+- **SDK:** `sdk/mycelium_sdk/{hive.py → events.py extraction, jobs.py, x402/settlement.py, context.py, constants.py, scaffold.py}`; new `sdk/mycelium_sdk/memory/`.
+- **Indexer (new, Firebase-backed):** `indexer/{worker.py, api.py}`, `firestore.indexes.json`.
+- **CLI:** `cli/mycelium_cli/commands/{jobs.py, discover.py, deploy.py, fund.py}`.
+- **IDE backend:** `ide/backend/auth/security.py`, `ide/backend/main.py` (endpoint auth, CORS).
+- **Tests/docs:** `sdk/tests/{test_jobs.py, test_x402.py, test_live_testnet.py}`, new mainnet smoke suite, compiler-limitations doc.
+
+## End-to-end verification (mainnet-readiness gate)
+
+A clean run that must all pass before the mainnet shift:
+1. Unauthorized `submit_proof`/`finalize` rejected on testnet; claimant/poster path settles.
+2. Indexer: register agents → instant `GET /agents` capability search; backfill reproduces state; worker resume is idempotent; SDK falls back when the indexer URL is down.
+3. Memory: write+anchor on machine A → rehydrate+verify on machine B; tamper → verify fails.
+4. Validation: zero/negative bounty/escrow/share rejected with clear errors.
+5. IDE: unauthenticated `/api/deploy` and `/compile` → 401; tokens encrypted with the dedicated key.
+6. Network guards: mainnet config refuses Friendbot, enforces funding, hits the mainnet registry, scaffolds with `network=mainnet`.
+7. Mainnet smoke suite green once; compiler limitations documented.
