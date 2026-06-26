@@ -1,0 +1,7 @@
+# Indexer-specific deps. stellar-sdk / cryptography / requests / typer / tomli-w
+# are pulled in by installing the local mycelium-sdk and mycelium-cli packages.
+fastapi>=0.110
+uvicorn[standard]>=0.29
+firebase-admin>=6.5
+google-cloud-firestore>=2.16
+requests>=2.31

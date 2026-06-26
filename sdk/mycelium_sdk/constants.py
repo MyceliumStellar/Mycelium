@@ -46,6 +46,13 @@ import os as _os
 DEFAULT_COMPILE_URL = "https://mycelium-zgez.onrender.com/compile"
 COMPILE_URL = _os.environ.get("MYCELIUM_COMPILE_URL", DEFAULT_COMPILE_URL)
 
+# Hosted off-chain indexer (O(1) agent/job discovery). Mirrors the compile-URL
+# convention: the SDK/CLI default to the hosted Mycelium indexer and fall back to
+# the on-chain event-scan when it is unreachable. Self-hosters override via the
+# MYCELIUM_INDEXER_URL env var (point it at their own `indexer.api` deployment).
+DEFAULT_INDEXER_URL = "https://mycelium-indexer.onrender.com"
+INDEXER_URL = _os.environ.get("MYCELIUM_INDEXER_URL", DEFAULT_INDEXER_URL)
+
 # Minimum balance (XLM) required to attempt a mainnet deployment, per sdk.md.
 MAINNET_MIN_XLM = 5.0
 

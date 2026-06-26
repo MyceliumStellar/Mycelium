@@ -1,0 +1,30 @@
+# Render Blueprint for the Mycelium off-chain indexer.
+# In Render: New → Blueprint → point at this repo. Render reads this file and
+# creates the service below. Set the one secret (FIREBASE_CREDENTIALS_JSON) when
+# prompted (sync: false keeps it out of git).
+services:
+  - type: web
+    name: mycelium-indexer
+    runtime: docker
+    dockerfilePath: ./indexer/Dockerfile
+    dockerContext: .            # build from repo root (needs sdk/ + cli/)
+    plan: free
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      # Run the ingest worker in-process so one service serves reads AND keeps
+      # Firestore fresh.
+      - key: RUN_INDEXER_WORKER
+        value: "1"
+      - key: MYCELIUM_NETWORK
+        value: testnet
+      # The deployed JobBoard (so /jobs + job events index). Registry address is
+      # the SDK default, no env needed.
+      - key: MYCELIUM_BOARD_ADDRESS
+        value: CAIGNIJBUA4GKKJBIO27JOAELZQ4KA7AYMB2F5C3W2D3DGQANZZCJGEH
+      # This project's Firestore db id is `default` (not the legacy `(default)`).
+      - key: FIRESTORE_DATABASE_ID
+        value: default
+      # Firebase service-account JSON (whole file contents). Set in the dashboard.
+      - key: FIREBASE_CREDENTIALS_JSON
+        sync: false

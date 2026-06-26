@@ -45,14 +45,21 @@ def test_resolve_parses_positional_return():
     assert meta["reputation"] == 3
 
 
-def test_register_sends_bytes_endpoint():
+def test_register_sends_bytes_endpoint(monkeypatch):
     ctx = _FakeContext(object())
     hc = HiveClient(ctx)
     hc.context.keypair = type("KP", (), {"public_key": "G" + "C" * 55})()
+    # Stub the best-effort indexer publish so the unit test makes no network call.
+    published = {}
+    monkeypatch.setattr(
+        HiveClient, "_publish_capability_tags",
+        lambda self, name, tags: published.update(name=name, tags=tags),
+    )
     hc.register("alice", ["x"], "https://a.sh")
     args = ctx.calls[0]["args"]
     assert args[0] == "alice"
     assert isinstance(args[3], bytes) and args[3] == b"https://a.sh"
+    assert published == {"name": "alice", "tags": ["x"]}
 
 
 def test_resolve_unregistered_raises():
@@ -118,7 +125,7 @@ def test_discover_scans_events_without_resolution():
     addr_b = _random_address()
     events = [_FakeEvent("alice", addr_a, 150, "c1"), _FakeEvent("bob", addr_b, 160, "c2")]
     hc = HiveClient(_DiscoverContext(events, resolved=None))
-    agents = hc.discover_agents(start_ledger=100, resolve=False)
+    agents = hc.discover_agents(start_ledger=100, resolve=False, prefer_indexer=False)
     names = {a["name"] for a in agents}
     assert names == {"alice", "bob"}
     assert all(a["public_key"].startswith("G") for a in agents)
@@ -129,8 +136,32 @@ def test_discover_resolves_each_agent():
     events = [_FakeEvent("alice", addr, 150, "c1")]
     resolved = {"address": addr, "capability": b"\x01" * 32, "endpoint": b"https://a.sh", "reputation": 7}
     hc = HiveClient(_DiscoverContext(events, resolved=resolved))
-    agents = hc.discover_agents(start_ledger=100, resolve=True)
+    agents = hc.discover_agents(start_ledger=100, resolve=True, prefer_indexer=False)
     assert len(agents) == 1
     assert agents[0]["name"] == "alice"
     assert agents[0]["endpoint"] == "https://a.sh"
     assert agents[0]["reputation"] == 7
+
+
+def test_discover_prefers_indexer_then_falls_back(monkeypatch):
+    """prefer_indexer uses the HTTP indexer; an outage falls back to the scan."""
+    import mycelium_sdk.indexer_client as ic
+
+    addr = _random_address()
+    # 1) Indexer reachable → returns its rows, no chain scan needed.
+    def _ok_list(self, **kw):
+        return {"agents": [{"name": "ix", "address": addr}], "as_of_ledger": 9}
+    monkeypatch.setattr(ic.IndexerClient, "list_agents", _ok_list)
+    hc = HiveClient(_DiscoverContext([], resolved=None))
+    rows = hc.discover_agents(prefer_indexer=True)
+    assert [a["name"] for a in rows] == ["ix"]
+    assert rows[0]["public_key"] == addr  # normalized from `address`
+
+    # 2) Indexer down → IndexerUnavailable → on-chain event scan.
+    def _down(self, **kw):
+        raise ic.IndexerUnavailable("boom")
+    monkeypatch.setattr(ic.IndexerClient, "list_agents", _down)
+    events = [_FakeEvent("alice", addr, 150, "c1")]
+    hc2 = HiveClient(_DiscoverContext(events, resolved=None))
+    rows2 = hc2.discover_agents(prefer_indexer=True, resolve=False, start_ledger=100)
+    assert [a["name"] for a in rows2] == ["alice"]

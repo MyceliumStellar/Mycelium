@@ -31,9 +31,18 @@ def run_discover(
     context = AgentContext.read_only(network_type=network)
     hive = HiveClient(context, registry_address=registry)
 
-    print(f"[discover] Scanning Hive Registry {registry} on {network}...")
+    # Hosted indexer first (instant, full history); falls back to the on-chain
+    # event-scan automatically when unreachable. An explicit --start-ledger means
+    # the caller wants the chain scan, so skip the indexer in that case.
+    prefer_indexer = start_ledger is None
+    if prefer_indexer:
+        print(f"[discover] Querying indexer (falls back to chain scan of {registry})...")
+    else:
+        print(f"[discover] Scanning Hive Registry {registry} on {network}...")
     try:
-        agents = hive.discover_agents(start_ledger=start_ledger, resolve=resolve)
+        agents = hive.discover_agents(
+            start_ledger=start_ledger, resolve=resolve, prefer_indexer=prefer_indexer
+        )
     except Exception as e:
         print(f"❌ Discovery failed: {e}")
         sys.exit(1)
