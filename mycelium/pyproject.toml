@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 # taken by an unrelated project). The IMPORT name stays `import mycelium` — see
 # [tool.setuptools.package-dir] below.
 name = "mycelium-stellar"
-version = "0.2.0"
+version = "0.3.0"
 description = "Mycelium — Python-first smart-contract + agent toolchain for Stellar/Soroban (one install: DSL, SDK, CLI, compiler). Install: pip install mycelium-stellar; import mycelium."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -17,8 +17,9 @@ authors = [{ name = "Mycelium" }]
 # provide the `mycelium_sdk` library, the `mycelium` CLI command (from
 # mycelium-cli's [project.scripts]), and the Python-to-WASM compiler.
 dependencies = [
-    "mycelium-sdk==0.2.0",
-    "mycelium-cli==0.2.0",
+    "mycelium-sdk==0.3.0",
+    "mycelium-cli==0.3.0",
+    # Compiler is unchanged this release — it stays pinned at 0.2.0.
     "mycelium-compiler==0.2.0",
 ]
 
@@ -26,6 +27,16 @@ dependencies = [
 langgraph = ["langgraph", "langchain-core"]
 gemini = ["google-generativeai"]
 anthropic = ["anthropic"]
+# The off-chain indexer is a HOSTED service (SDK/CLI just call its URL over
+# HTTP and fall back to the on-chain event-scan). Normal users never install it;
+# this extra is only for sovereign self-hosters who want to run their own
+# worker + read API (`pip install mycelium-stellar[indexer]`).
+indexer = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "firebase-admin>=6.5",
+    "google-cloud-firestore>=2.16",
+]
 
 [project.urls]
 Homepage = "https://github.com/Srizdebnath/Mycelium"

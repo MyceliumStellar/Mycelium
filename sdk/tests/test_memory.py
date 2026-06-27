@@ -4,7 +4,9 @@ import hashlib
 
 import pytest
 
-from mycelium_sdk.memory import AgentMemory, LocalVectorBackend, TieredBackend
+from mycelium_sdk.memory import (
+    AgentMemory, AnchoringPolicy, LocalVectorBackend, SupermemoryBackend, TieredBackend,
+)
 
 
 class _FakeKP:
@@ -131,3 +133,115 @@ def test_rehydrate_rejects_tampered_blob(tmp_path):
     # feed a blob that doesn't match the on-chain root
     with pytest.raises(ValueError):
         mem.rehydrate(fetch=lambda uri: b'{"owner":"x","records":[]}')
+
+
+# ── anchor publish + anchoring policy hooks ──────────────────────────────────
+def test_anchor_publish_callback_sets_uri(tmp_path):
+    ctx = _FakeContext()
+    mem = AgentMemory(ctx, backend="local", backend_kwargs={"path": str(tmp_path / "p.db")})
+    mem.remember("publishable", ["x"])
+    captured = {}
+
+    def publish(blob: bytes) -> str:
+        captured["blob"] = blob
+        return "https://store/mem.json"
+
+    mem.anchor(publish=publish)
+    # the published blob is exactly what gets hashed into the root
+    assert captured["blob"] == mem.backend.export_blob()
+    assert mem.get_anchor()["uri"] == "https://store/mem.json"
+
+
+def test_on_job_complete_only_anchors_when_dirty(tmp_path):
+    ctx = _FakeContext()
+    mem = AgentMemory(ctx, backend="local", backend_kwargs={"path": str(tmp_path / "j.db")})
+    assert mem.on_job_complete(uri="u") is None       # nothing written → no tx
+    mem.remember("did the job", [])
+    assert mem.is_dirty is True
+    v = mem.on_job_complete(uri="u")
+    assert v == 1 and mem.is_dirty is False            # anchored, now clean
+    assert mem.on_job_complete(uri="u") is None        # no new writes → no second tx
+
+
+def test_heartbeat_throttles_until_interval_and_min_writes(tmp_path):
+    ctx = _FakeContext()
+    policy = AnchoringPolicy(heartbeat_seconds=100.0, min_writes=2)
+    mem = AgentMemory(ctx, backend="local", backend_kwargs={"path": str(tmp_path / "h.db")},
+                      policy=policy)
+    mem.remember("one", [])
+    assert mem.heartbeat(uri="u", now=1000.0) is None  # below min_writes
+    mem.remember("two", [])
+    v1 = mem.heartbeat(uri="u", now=1000.0)
+    assert v1 == 1                                      # first heartbeat (no prior anchor)
+    mem.remember("three", [])
+    mem.remember("four", [])
+    assert mem.heartbeat(uri="u", now=1050.0) is None   # within heartbeat window → throttled
+    v2 = mem.heartbeat(uri="u", now=1200.0)
+    assert v2 == 2                                       # window elapsed → anchors again
+
+
+# ── Supermemory backend (HTTP mocked; real request/response shapes) ──────────
+class _FakeSupermemory(SupermemoryBackend):
+    """SupermemoryBackend with the HTTP layer replaced by an in-memory store
+    that mimics the real v3 API shapes (list omits content; GET returns it)."""
+
+    def __init__(self, owner):
+        super().__init__(owner, api_key="test-key")
+        self._docs = {}  # customId -> {content, metadata}
+
+    def _post(self, path, body):
+        if path == "/v3/documents":
+            cid = body["customId"]
+            self._docs[cid] = {"content": body["content"], "metadata": body["metadata"]}
+            return {"id": cid, "status": "queued"}
+        if path == "/v3/search":
+            out = []
+            for cid, d in self._docs.items():
+                if body["q"].split()[0] in d["content"]:
+                    out.append({"content": d["content"], "metadata": d["metadata"], "score": 0.9})
+            return {"results": out[: body.get("limit", 5)]}
+        if path == "/v3/documents/list":
+            # the real list endpoint returns `memories` WITHOUT content
+            mems = [{"id": cid, "metadata": d["metadata"]} for cid, d in self._docs.items()]
+            return {"memories": mems, "pagination": {"currentPage": 1, "totalPages": 1}}
+        raise AssertionError(f"unexpected POST {path}")
+
+    def _get(self, path):
+        cid = path.rsplit("/", 1)[-1]
+        d = self._docs[cid]
+        return {"id": cid, "content": d["content"], "metadata": d["metadata"]}
+
+
+def test_supermemory_requires_api_key(monkeypatch):
+    monkeypatch.delenv("SUPERMEMORY_API_KEY", raising=False)
+    with pytest.raises(RuntimeError):
+        SupermemoryBackend("Gowner")
+
+
+def test_supermemory_roundtrip_and_canonical_blob_matches_local():
+    sm = _FakeSupermemory("Gowner")
+    sm.remember("the sky is blue", ["fact"])
+    sm.remember("project deadline soon", ["project"])
+    # idempotent: same content+tags upserts, no dupe
+    sm.remember("the sky is blue", ["fact"])
+    assert sm.count() == 2
+
+    hits = sm.recall("project", k=5)
+    assert any("deadline" in h["content"] for h in hits)
+    assert hits[0]["tags"] == ["project"]
+
+    # the cloud-reconstructed canonical blob equals a local backend's for the
+    # same memory set → the on-chain root is identical (backends interchangeable)
+    local = LocalVectorBackend("Gowner", path=":memory:")
+    local.remember("the sky is blue", ["fact"])
+    local.remember("project deadline soon", ["project"])
+    assert sm.export_blob() == local.export_blob()
+
+
+def test_supermemory_behind_agentmemory_anchor(tmp_path):
+    ctx = _FakeContext()
+    mem = AgentMemory(ctx, backend=_FakeSupermemory("Gowner"))
+    mem.remember("cloud memory", ["x"])
+    v = mem.anchor(uri="supermemory://Gowner")
+    assert v == 1
+    assert mem.verify() is True

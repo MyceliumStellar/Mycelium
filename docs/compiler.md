@@ -378,8 +378,8 @@ pytest compiler/tests
 
 ## 🔗 Related Docs
 
+- [dsl.md](./dsl.md) — the Mycelium DSL type system the compiler parses.
 - [ide.md](./ide.md) — the Web IDE that wraps this compiler behind a `/compile`
-  endpoint and a Docker sandbox, plus GitHub-backed workspaces and on-chain
-  deployment.
-</content>
-</invoke>
+  endpoint and a Docker sandbox.
+- [contracts.md](./contracts.md) — the production contracts compiled by this pipeline.
+- [cli.md](./cli.md) — the `mycelium compile` and `mycelium check` commands.

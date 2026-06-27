@@ -284,7 +284,41 @@ The repo-root `start.sh` orchestrates everything:
 
 ---
 
+## 📚 Frontend Documentation Page
+
+The IDE includes a comprehensive built-in docs site at `/docs`, rendered by
+[`docs-content.tsx`](file:///home/ansh/Mycelium/ide/frontend/src/app/docs/docs-content.tsx)
+with a sidebar layout
+([`layout.tsx`](file:///home/ansh/Mycelium/ide/frontend/src/app/docs/layout.tsx)).
+
+### Sections
+
+| Route | Content |
+|---|---|
+| `/docs/introduction` | Platform overview, core features, why Mycelium |
+| `/docs/quick-start` | Install → scaffold → compile → deploy → run |
+| `/docs/core-concepts` | Agent model, smart contracts, Hive Registry, commerce |
+| `/docs/build-agent` | Step-by-step Counter Agent tutorial |
+| `/docs/deploy` | Configuration, testnet/mainnet deployment |
+| `/docs/commerce` | x402 escrow protocol, settlement flow, use cases |
+| `/docs/registry` | Hive Registry contract API, HiveClient, events |
+| `/docs/sdk` | AgentContext, typed client, adapters, encryption |
+| `/docs/cli` | mycelium.toml config, all CLI commands |
+| `/docs/indexer` | Off-chain indexer: architecture, schema, API |
+| `/docs/memory` | Persistent agent memory: API, backends, anchoring |
+| `/docs/architecture` | System overview, sandbox, compiler pipeline, benchmarks |
+| `/docs/changelog` | Version history (0.3.0, 0.2.0, 0.1.0) |
+
+Features: Ctrl+K search, scrollspy TOC, previous/next page navigation,
+copy-to-clipboard code blocks, callout components (info/warn/tip).
+
+---
+
 ## 🔗 Related Docs
 
 - [compiler.md](./compiler.md) — the Python→Rust→WASM compiler and its Docker image.
-</content>
+- [sdk.md](./sdk.md) — the SDK that powers deployment and contract interaction.
+- [contracts.md](./contracts.md) — the on-chain contracts.
+- [indexer.md](./indexer.md) — the off-chain indexer queried by the agent page.
+- [memory.md](./memory.md) — persistent agent memory.
+

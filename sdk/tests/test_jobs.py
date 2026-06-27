@@ -72,6 +72,28 @@ def test_post_job_rejects_bad_mode():
         JobBoardClient(_FakeContext(), BOARD).post_job("u", b"h", Decimal("1"), mode="bogus")
 
 
+# ── P3: bounty + share validation (reject before any escrow/tx) ──────────────
+@pytest.mark.parametrize("bad_bounty", ["0", "-5", "0.00000001"])
+def test_post_job_rejects_non_positive_or_substroop_bounty(monkeypatch, bad_bounty):
+    ctx = _FakeContext()
+    import mycelium_sdk.jobs as jobs_mod
+    # If validation failed to fire, this stub would let a tx through — so the
+    # test also proves nothing was posted.
+    monkeypatch.setattr(jobs_mod.EscrowPaymentRouter, "create_locked_escrow",
+                        lambda self, **kw: "CESCROW")
+    with pytest.raises(ValueError):
+        JobBoardClient(ctx, BOARD).post_job("u", b"h", Decimal(bad_bounty), mode="single")
+    assert [c for c in ctx.calls if c["function"] == "post_job"] == []
+
+
+@pytest.mark.parametrize("bad_share", [0, -1, 10001])
+def test_join_swarm_rejects_out_of_range_share(bad_share):
+    ctx = _FakeContext()
+    with pytest.raises(ValueError):
+        JobBoardClient(ctx, BOARD).join_swarm(3, "vision", bad_share)
+    assert ctx.calls == []
+
+
 def test_join_swarm_marshals_share():
     ctx = _FakeContext()
     JobBoardClient(ctx, BOARD).join_swarm(3, "vision", 4000)

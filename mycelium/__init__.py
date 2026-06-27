@@ -7,6 +7,7 @@ from mycelium_sdk.context import AgentContext, StellarNetwork, TxResult
 from mycelium_sdk.hive import HiveClient
 from mycelium_sdk.x402.settlement import EscrowPaymentRouter, EscrowPaymentManager
 from mycelium_sdk.agent_loop import run_agent_loop, ContractTool
+from mycelium_sdk.memory import AgentMemory, AnchoringPolicy
 
 __all__ = [
     "contract", "external", "view", "storage", "event", "auth", "state",
@@ -15,4 +16,5 @@ __all__ = [
     "AgentContext", "StellarNetwork", "TxResult", "HiveClient",
     "EscrowPaymentRouter", "EscrowPaymentManager",
     "run_agent_loop", "ContractTool",
+    "AgentMemory", "AnchoringPolicy",
 ]

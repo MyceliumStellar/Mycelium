@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "compiler")))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "sdk")))
 
-from fastapi import FastAPI, Depends, HTTPException, Header, status
+from fastapi import FastAPI, Depends, HTTPException, Header, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
@@ -34,9 +34,37 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Only the methods the API actually serves (GET/POST) plus the preflight
+    # OPTIONS — not a blanket "*".
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+# ── Lightweight per-user rate limiting (in-memory token bucket) ──────────────
+# Single-process gateway, so an in-memory limiter is sufficient to stop a
+# single authenticated user from hammering the compute endpoints. Keyed by
+# user id; resets on a rolling window.
+import time as _time
+import threading as _threading
+
+_RATE_LIMITS = {"compile": (30, 60.0)}  # (max_calls, window_seconds)
+_rate_state = {}
+_rate_lock = _threading.Lock()
+
+
+def rate_limit(bucket: str, user_id: str):
+    max_calls, window = _RATE_LIMITS.get(bucket, (60, 60.0))
+    now = _time.time()
+    key = f"{bucket}:{user_id}"
+    with _rate_lock:
+        hits = [t for t in _rate_state.get(key, []) if now - t < window]
+        if len(hits) >= max_calls:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded for {bucket} ({max_calls}/{int(window)}s). Slow down.",
+            )
+        hits.append(now)
+        _rate_state[key] = hits
 
 @app.on_event("startup")
 def startup_event():
@@ -111,6 +139,19 @@ def get_current_user_session(authorization: str = Header(None), db = Depends(get
         
     github_token = decrypt_token(cred_data.get("encrypted_github_token"))
     return {"user": user, "github_token": github_token}
+
+
+def get_optional_user_session(authorization: str = Header(None), db = Depends(get_db)):
+    """Like get_current_user_session but returns None instead of 401 for anonymous
+    callers. Used by /compile, which stays public (the CLI's `mycelium compile`
+    hits it without a GitHub session) but rate-limits authed users by id and
+    anonymous users by IP."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    try:
+        return get_current_user_session(authorization=authorization, db=db)
+    except HTTPException:
+        return None
 
 
 @app.get("/")
@@ -503,12 +544,26 @@ def scaffold_agent(req: ScaffoldRequest, session = Depends(get_current_user_sess
     }
 
 # Compilation Endpoint (Stateless)
+_MAX_COMPILE_SOURCE_BYTES = 256 * 1024  # 256 KiB — no real contract is larger
+
+
 @app.post("/compile", response_model=CompileResponse)
-async def compile_endpoint(req: CompileRequest):
+async def compile_endpoint(
+    req: CompileRequest,
+    request: Request,
+    session = Depends(get_optional_user_session),
+):
     """
-    Compilation endpoint running directly on host.
-    Invokes the compiler visitor, type checks, and generates WASM.
+    Compilation endpoint running directly on host. Stays PUBLIC because the CLI's
+    zero-install `mycelium compile --remote` posts here without a GitHub session,
+    but it is no longer an unbounded compute surface: a source-size cap plus a
+    rolling rate limit (keyed by user id when authenticated, else client IP)
+    bound abuse. Invokes the compiler visitor, type checks, and generates WASM.
     """
+    if len(req.source_code.encode("utf-8")) > _MAX_COMPILE_SOURCE_BYTES:
+        raise HTTPException(status_code=413, detail="Source too large (max 256 KiB).")
+    identity = session["user"].id if session else (request.client.host if request.client else "anon")
+    rate_limit("compile", identity)
     res = compile_in_host_sandbox(req.source_code)
     
     wasm_b64 = ""
@@ -524,10 +579,14 @@ class DeployRequest(BaseModel):
     secret_key: Optional[str] = None
 
 @app.post("/api/deploy")
-def deploy_contract_endpoint(req: DeployRequest):
+def deploy_contract_endpoint(req: DeployRequest, session = Depends(get_current_user_session)):
     """
     Deploy a contract WASM via pure-Python signed Soroban transactions
     (upload WASM hash → create contract). No stellar-cli / Rust dependency.
+
+    Authenticated: this endpoint can fund + deploy (and accepts a wallet secret
+    in the body over HTTPS only), so it must never be an open surface. Request
+    bodies on this route must NOT be logged (they may carry a secret key).
     """
     import base64
     from stellar_sdk import Keypair, SorobanServer, Network

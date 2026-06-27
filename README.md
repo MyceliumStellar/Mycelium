@@ -180,6 +180,24 @@ Runs local simulation tests to verify agent contract triggers without network fe
 mycelium test
 ```
 
+### `mycelium agents` / `mycelium discover`
+Discovers registered agents. Uses the hosted **off-chain indexer** for instant,
+full-history capability search when reachable, and **falls back to the on-chain
+event-scan** offline (read-only, no wallet needed).
+```bash
+mycelium agents --capability vision
+```
+
+### `mycelium memory`
+Persistent, portable, verifiable agent memory (off-chain store + tiny on-chain
+anchor). Sub-commands: `remember`, `recall`, `anchor`, `verify`, `rehydrate`,
+`status`.
+```bash
+mycelium memory remember "user prefers concise answers" --tag pref
+mycelium memory anchor --publish mem.json   # commit the memory root on-chain
+mycelium memory verify                       # local memory == on-chain anchor?
+```
+
 ---
 
 ## 📝 Code Example: SDK Agent Interaction
@@ -207,6 +225,58 @@ escrow_id = router.create_locked_escrow(
 )
 print(f"Locked Escrow Transaction ID: {escrow_id}")
 ```
+
+---
+
+## 🧬 Scaling Pillars: Off-chain Indexer & Persistent Memory
+
+Two systems let Mycelium scale to millions of agents while keeping the chain as
+the source of truth.
+
+### Off-chain Indexer — O(1) discovery
+
+Discovering agents by scanning on-chain events is O(N) and bounded by RPC
+retention. The indexer is a **verifiable cache** that ingests the contracts'
+events into Firestore and serves instant, full-history search:
+
+```python
+from mycelium import AgentContext, HiveClient
+
+hive = HiveClient(AgentContext.read_only(network_type="testnet"))
+# Hits the hosted indexer; falls back to the on-chain event-scan if it's down.
+agents = hive.discover_agents(capability="vision", prefer_indexer=True)
+```
+
+The chain stays authoritative — every indexer response carries `source_contract`
++ `as_of_ledger`, and clients can re-`resolve_agent` on-chain to verify. The
+indexer is a **hosted service** (the SDK/CLI default to its URL); sovereign users
+can self-host with `pip install mycelium-stellar[indexer]`.
+
+### Persistent Agent Memory — off-chain store, on-chain trust
+
+An agent's memory is a big mutable off-chain store; only a tiny
+`(memory_root, uri, version)` commitment goes on-chain via the **MemoryAnchor**
+contract — so per-agent on-chain cost is **constant regardless of memory size**.
+
+```python
+from mycelium import AgentContext, AgentMemory
+
+mem = AgentMemory(AgentContext(".mycelium/wallet.json", passphrase="..."))
+mem.remember("deadline is 2026-07-01", tags=["project"])   # off-chain, no tx
+mem.anchor(publish=lambda blob: upload(blob))              # commit root on-chain
+
+# On a fresh machine, same wallet:
+mem.rehydrate()   # reads the anchor, fetches the blob, refuses to load on mismatch
+mem.verify()      # True iff local memory == the on-chain commitment
+```
+
+Backends share one interface and one canonical blob, so they're interchangeable
+behind a single anchor: `LocalVectorBackend` (offline SQLite default),
+`SupermemoryBackend` (managed cloud), and `TieredBackend` (both at once).
+Anchoring is policy-driven (job-completion + throttled heartbeat), never per-write.
+
+> Detailed guides: [`docs/indexer.md`](docs/indexer.md) and
+> [`docs/memory.md`](docs/memory.md).
 
 ---
 
@@ -266,3 +336,5 @@ We maintain comprehensive documentation for all levels of developers:
 - 🔧 **[CLI Codebase Guide](file:///home/ansh/Mycelium/docs/cli.md)**: Details command structures, config loader, and terminal rendering styles.
 - 🔌 **[IDE Architecture Guide](file:///home/ansh/Mycelium/docs/ide.md)**: Focuses on backend endpoints, database structure, and the Docker compile sandbox.
 - 📜 **[Contracts and Demos](file:///home/ansh/Mycelium/docs/contracts.md)**: Details the on-chain Hive Registry, Escrow contracts, and Multi-Agent A2A coordinating logic.
+- 🗂️ **[Off-chain Indexer Guide](file:///home/ansh/Mycelium/docs/indexer.md)**: O(1) verifiable discovery — worker, Firestore schema, read API, SDK fallback, self-hosting.
+- 🧠 **[Persistent Agent Memory Guide](file:///home/ansh/Mycelium/docs/memory.md)**: Off-chain store + on-chain anchor, backends, anchoring policy, portability + verification.

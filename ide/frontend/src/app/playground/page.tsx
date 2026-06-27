@@ -871,7 +871,9 @@ export default function Playground() {
     addCompilerLog("info", "Executing local Abstract Syntax Tree (AST) parsing...");
 
     try {
-      const res = await fetch(`${API_BASE_URL}/compile`, {
+      // /compile is authenticated + rate-limited server-side; apiFetch attaches
+      // the Bearer session token (and silently refreshes it on 401).
+      const res = await apiFetch(`${API_BASE_URL}/compile`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filename: activeFile, source_code: editorContent })

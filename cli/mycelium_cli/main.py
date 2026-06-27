@@ -24,6 +24,7 @@ from mycelium_cli.commands.run import run_run
 from mycelium_cli.commands.test import run_test
 from mycelium_cli.commands.jobs import job_app
 from mycelium_cli.commands.deal import deal_app
+from mycelium_cli.commands.memory import memory_app
 
 app = typer.Typer(help="Mycelium Developer Framework CLI")
 # Sovereign Job Boards: `mycelium job post|list|claim|assign|join|submit|finalize|status`
@@ -31,11 +32,14 @@ app.add_typer(job_app, name="job")
 # A2A commerce (conditional x402 escrow between two agents):
 # `mycelium deal open|release|refund|status`
 app.add_typer(deal_app, name="deal")
+# Persistent agent memory (off-chain store + tiny on-chain anchor):
+# `mycelium memory remember|recall|anchor|verify|rehydrate|status`
+app.add_typer(memory_app, name="memory")
 
 PASSPHRASE_ENV_VAR = "MYCELIUM_DECRYPT_KEY"
 
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 
 def _version_callback(value: bool):

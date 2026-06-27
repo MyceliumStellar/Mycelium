@@ -19,16 +19,37 @@ fetch it; for the local backend you can also point it at a `file://`/path.
 """
 
 import hashlib
-from typing import Any, Dict, List, Optional
+import time
+from typing import Any, Callable, Dict, List, Optional
 
 
 def _content_root(blob: bytes) -> bytes:
     return hashlib.sha256(blob).digest()
 
 
+class AnchoringPolicy:
+    """
+    The cost knob: when to spend an on-chain `set_anchor` tx.
+
+    Anchoring is NOT per-write (that would put a tx on every `remember`). Instead
+    you anchor at meaningful checkpoints — job completion and a periodic
+    heartbeat — and only when the memory has actually changed since the last
+    anchor. `min_writes` and `heartbeat_seconds` bound how often a heartbeat may
+    fire; job completion always anchors if there are unanchored writes.
+
+        policy = AnchoringPolicy(heartbeat_seconds=3600, min_writes=1)
+        mem = AgentMemory(ctx, policy=policy)
+    """
+
+    def __init__(self, heartbeat_seconds: float = 3600.0, min_writes: int = 1):
+        self.heartbeat_seconds = heartbeat_seconds
+        self.min_writes = max(1, int(min_writes))
+
+
 class AgentMemory:
     def __init__(self, context, backend="auto", anchor_address: Optional[str] = None,
-                 backend_kwargs: Optional[Dict[str, Any]] = None):
+                 backend_kwargs: Optional[Dict[str, Any]] = None,
+                 policy: Optional[AnchoringPolicy] = None):
         """
         `backend` is either a name ("local" | "supermemory" | "auto") or a
         pre-built backend instance — pass a `TieredBackend(local, cloud)` to use
@@ -54,10 +75,17 @@ class AgentMemory:
             # remember/recall/export_blob/import_blob.
             self.backend = backend
 
+        # Anchoring policy state (the cost knob — see AnchoringPolicy).
+        self.policy = policy or AnchoringPolicy()
+        self._writes_since_anchor = 0
+        self._last_anchor_ts: Optional[float] = None
+
     # ── off-chain (no chain tx) ──────────────────────────────────────────────
     def remember(self, content: str, tags: Optional[List[str]] = None) -> int:
         """Store a memory off-chain. No chain transaction."""
-        return self.backend.remember(content, tags)
+        rid = self.backend.remember(content, tags)
+        self._writes_since_anchor += 1
+        return rid
 
     def recall(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
         """Semantic-ish search over off-chain memory. No chain transaction."""
@@ -67,15 +95,60 @@ class AgentMemory:
         """SHA-256 root of the current committed memory state."""
         return _content_root(self.backend.export_blob())
 
+    @property
+    def is_dirty(self) -> bool:
+        """True if memory changed since the last anchor (an anchor would do work)."""
+        return self._writes_since_anchor > 0
+
     # ── on-chain commitment ──────────────────────────────────────────────────
-    def anchor(self, uri: str = "", acl: bytes = b"") -> int:
+    def anchor(self, uri: str = "", acl: bytes = b"",
+               publish: Optional[Callable[[bytes], str]] = None,
+               at: Optional[float] = None) -> int:
         """
         Checkpoint: compute `memory_root` and commit it (+`uri`) on-chain, bumping
         the version. `uri` is where the blob is fetchable from another machine
         (https / Supermemory / IPFS / a file path for local single-machine use).
-        Returns the new on-chain version.
+
+        Pass `publish(blob) -> uri` to publish the canonical blob somewhere
+        (e.g. upload to object storage) and use the returned location as the
+        on-chain `uri` — keeps publish + commit atomic so the anchor never
+        points at a blob that was never stored. Returns the new on-chain version.
         """
-        return self.anchor_client.set_anchor(self.memory_root(), uri, acl)
+        if publish is not None:
+            uri = publish(self.backend.export_blob())
+        version = self.anchor_client.set_anchor(self.memory_root(), uri, acl)
+        self._writes_since_anchor = 0
+        self._last_anchor_ts = time.time() if at is None else at
+        return version
+
+    # ── anchoring policy hooks (job-complete + heartbeat; NOT per-write) ──────
+    def on_job_complete(self, uri: str = "", acl: bytes = b"",
+                        publish: Optional[Callable[[bytes], str]] = None) -> Optional[int]:
+        """
+        Anchor at a job-completion checkpoint. Anchors iff there are unanchored
+        writes (so completing a job that touched no memory costs nothing).
+        Returns the new version, or None if nothing needed anchoring.
+        """
+        if not self.is_dirty:
+            return None
+        return self.anchor(uri=uri, acl=acl, publish=publish)
+
+    def heartbeat(self, uri: str = "", acl: bytes = b"",
+                  publish: Optional[Callable[[bytes], str]] = None,
+                  now: Optional[float] = None) -> Optional[int]:
+        """
+        Periodic heartbeat anchor (the cost knob). Anchors only when memory is
+        dirty, at least `policy.min_writes` writes have accrued, AND at least
+        `policy.heartbeat_seconds` have elapsed since the last anchor. Otherwise
+        a no-op. Returns the new version, or None if it was throttled.
+        """
+        if self._writes_since_anchor < self.policy.min_writes:
+            return None
+        now = time.time() if now is None else now
+        if self._last_anchor_ts is not None and \
+                (now - self._last_anchor_ts) < self.policy.heartbeat_seconds:
+            return None
+        return self.anchor(uri=uri, acl=acl, publish=publish, at=now)
 
     def get_anchor(self) -> Optional[Dict[str, Any]]:
         """Read this agent's current on-chain anchor, or None if never anchored."""

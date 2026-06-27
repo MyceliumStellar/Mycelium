@@ -9,13 +9,13 @@ contract. Big mutable private data stays off-chain; only (root, uri, version)
 goes on-chain, so per-agent on-chain cost is constant regardless of memory size.
 """
 
-from mycelium_sdk.memory.agent_memory import AgentMemory
+from mycelium_sdk.memory.agent_memory import AgentMemory, AnchoringPolicy
 from mycelium_sdk.memory.anchor import MemoryAnchorClient
 from mycelium_sdk.memory.backends import (
     LocalVectorBackend, SupermemoryBackend, TieredBackend,
 )
 
 __all__ = [
-    "AgentMemory", "MemoryAnchorClient",
+    "AgentMemory", "AnchoringPolicy", "MemoryAnchorClient",
     "LocalVectorBackend", "SupermemoryBackend", "TieredBackend",
 ]

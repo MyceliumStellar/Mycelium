@@ -19,6 +19,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from mycelium_sdk.scval import u32, u64
 from mycelium_sdk.x402.settlement import EscrowPaymentRouter, STROOPS_PER_XLM, DEFAULT_ESCROW_TIMEOUT_SECONDS
+from mycelium_sdk.logging import get_logger
+
+_log = get_logger("jobs")
 
 # Job lifecycle status symbols emitted/stored by the contract.
 STATUS_OPEN = "open"
@@ -78,10 +81,21 @@ class JobBoardClient:
         if mode not in ("single", "swarm"):
             raise ValueError("mode must be 'single' or 'swarm'.")
 
+        bounty = Decimal(str(bounty_xlm))
+        if bounty <= 0:
+            raise ValueError(f"Job bounty must be positive (got {bounty_xlm} XLM).")
+        if deadline_seconds <= 0:
+            raise ValueError(f"Job deadline must be positive (got {deadline_seconds}s).")
+
         from mycelium_sdk.constants import native_token_address
 
         token = token or native_token_address(self.context.network_type)
-        bounty_stroops = int(Decimal(str(bounty_xlm)) * STROOPS_PER_XLM)
+        bounty_stroops = int(bounty * STROOPS_PER_XLM)
+        if bounty_stroops <= 0:
+            raise ValueError(
+                f"Job bounty {bounty_xlm} XLM rounds to 0 stroops; use at least "
+                f"0.0000001 XLM (1 stroop)."
+            )
         poster = self.context.keypair.public_key
 
         # Lock the bounty. The placeholder provider is the poster; the real
@@ -130,6 +144,12 @@ class JobBoardClient:
 
     def join_swarm(self, job_id: int, capability_tag: str, share_bps: int):
         """Join a swarm job with an agreed bounty share (basis points)."""
+        # Contract only checks the upper bound; reject non-positive / >100% here
+        # so a bad share fails before it ever costs a transaction.
+        if not 0 < int(share_bps) <= 10000:
+            raise ValueError(
+                f"share_bps must be between 1 and 10000 basis points (got {share_bps})."
+            )
         return self.context.call_contract(
             contract_id=self.board_address,
             function_name="join_swarm",
@@ -248,7 +268,10 @@ class JobBoardClient:
         for job_id in range(count, 0, -1):
             try:
                 job = self.get_job(job_id)
-            except Exception:
+            except Exception as exc:
+                # Read-only discovery: skip an unreadable job rather than abort
+                # the whole scan, but log at debug so the failure isn't invisible.
+                _log.debug("list_open_jobs: skipping job %s (%s)", job_id, exc)
                 continue
             if status is None or job.get("status") == status:
                 jobs.append(job)

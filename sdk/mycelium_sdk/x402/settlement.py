@@ -17,6 +17,9 @@ from decimal import Decimal
 
 # 1 XLM = 10,000,000 stroops; Soroban token amounts are integer stroops (i128).
 STROOPS_PER_XLM = 10_000_000
+# Soroban token amounts are i128; reject anything that can't fit before we ever
+# build a transaction (the escrow re-checks on-chain, but fail early + clearly).
+I128_MAX = (1 << 127) - 1
 # Default escrow timeout (seconds) after which the depositor may refund.
 DEFAULT_ESCROW_TIMEOUT_SECONDS = 24 * 60 * 60
 
@@ -53,8 +56,25 @@ class EscrowPaymentRouter:
 
         from mycelium_sdk.constants import native_token_address
 
+        # Validate the amount BEFORE deploying anything (a bad amount otherwise
+        # burns a deploy tx on an escrow that can never be funded correctly).
+        amount = Decimal(str(amount_xlm))
+        if amount <= 0:
+            raise ValueError(f"Escrow amount must be positive (got {amount_xlm} XLM).")
+        amount_stroops = int(amount * STROOPS_PER_XLM)
+        if amount_stroops <= 0:
+            raise ValueError(
+                f"Escrow amount {amount_xlm} XLM rounds to 0 stroops; use at least "
+                f"0.0000001 XLM (1 stroop)."
+            )
+        if amount_stroops > I128_MAX:
+            raise ValueError(
+                f"Escrow amount {amount_xlm} XLM exceeds the i128 token ceiling."
+            )
+        if timeout_seconds <= 0:
+            raise ValueError(f"Escrow timeout must be positive (got {timeout_seconds}s).")
+
         token = token or native_token_address(self.context.network_type)
-        amount_stroops = int(Decimal(str(amount_xlm)) * STROOPS_PER_XLM)
         depositor = self.context.keypair.public_key
 
         print(
@@ -98,6 +118,13 @@ class EscrowPaymentRouter:
         """
         if not shares:
             raise ValueError("split_release requires at least one (recipient, share_bps).")
+        for recipient, bps in shares:
+            if not recipient:
+                raise ValueError("split_release: every share needs a recipient address.")
+            if int(bps) <= 0:
+                raise ValueError(
+                    f"Swarm share basis points must be positive (got {bps} for {recipient})."
+                )
         total_bps = sum(int(bps) for _, bps in shares)
         if total_bps != 10000:
             raise ValueError(

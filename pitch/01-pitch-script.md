@@ -1,79 +1,65 @@
-# Mycelium — Investor Pitch Script (≈90 sec, talking-to-camera, NO demo)
+# Mycelium — Pitch Script (40–50 sec, talking-to-camera, NO demo)
 
-> **Audience:** Venture investors / VCs. They already believe agents are coming; this pitches the *product* and why we own the layer they'll settle on.
-> **Format:** Spoken to camera, **no screen share, no live demo.** Everything is said, not shown — so the words have to carry the proof. **Two presenters — Ansh (Sriz) and Rohan — splitting the 90 seconds.** We present as a team that built this together; never frame it as one person's solo work.
-> **Goal:** In 90 seconds, land that Mycelium is the live, on-chain economy for AI agents — and that we earn as it grows. **No raise amount, no use-of-funds — the product is the pitch.**
-> **Status baked in:** compiler, registry, escrow, job boards, off-chain indexer, and persistent agent memory are all **shipped and live**; mainnet is already funded.
+> **Audience:** Judges / investors who understand AI agents are coming.
+> **Format:** Spoken to camera — **no screen share, no demo.** Two presenters: Ansh and Rohan.
+> **Constraint:** 40–50 seconds. ~105–115 words at ~140 wpm.
+> **Beats to hit:** Who you are → What you're building → The problem → Why it matters.
 
-**How to use this file:** Bold lines are your spine; plain text is the narration — say it your way, look down the lens, don't read robotically. `[brackets]` are delivery cues. Target ~210 spoken words at ~140 wpm = ~90 sec. Pause on the bold beats; let them land.
-
----
-
-## [0:00–0:15] — HOOK *(Ansh)*
-
-"Soon there won't be millions of AI agents — there'll be billions. And they won't just talk to each other; they'll **hire and pay each other**, with no human in the loop.
-
-The problem: agents can coordinate, but they have **no economy** — no way to find a counterparty, settle a payment they trust, or prove who did what."
+**How to use:** Bold lines are the spine. Say the rest naturally — don't read. `[brackets]` are delivery cues.
 
 ---
 
-## [0:15–0:35] — WHAT WE BUILT *(Ansh)*
+## [0:00–0:08] — WHO WE ARE + THE PROBLEM *(Ansh)*
 
-"We're Mycelium — the economy for AI agents, and it's **live on-chain today.**
+`[Look down the lens. Calm, confident.]`
 
-Python developers deploy agents straight to Stellar — no Rust. And once they're live, agents can **discover** each other on-chain, **contract** through escrow, **settle** the moment work is proven, **split** a bounty across a whole swarm, and carry **portable memory** they can prove is their own."
+"Hey — we're Ansh and Rohan, and we're building Mycelium.
 
----
-
-## [0:35–1:05] — HOW THE LOOP WORKS (spoken, no screen) *(Rohan)*
-
-> **You can't show it, so paint it — one clean sentence per step, slow and concrete.**
-
-"Here's what that looks like between two agents, no human involved.
-
-One agent needs a task done. It **finds another agent by capability** — instantly, from our on-chain index. They've never met.
-
-It **locks the bounty into escrow** — so it can't rug the payment, and the other can't run off with it.
-
-The second agent does the work and **submits proof.** The contract checks it on-chain, **releases the payment**, splits it across the swarm — **and a small protocol fee routes to us.**
-
-Every step is a real transaction on Stellar. You don't have to take our word for it — **it's all on the public ledger.**"
+There are going to be billions of AI agents. They can already reason, plan, and talk to each other — but they have **no economy.** No way to find each other, hire each other, or pay each other without a human in the middle."
 
 ---
 
-## [1:05–1:30] — THE BUSINESS & CLOSE *(Rohan → Ansh on the close)*
+## [0:08–0:30] — WHAT WE'RE BUILDING *(Ansh)*
 
-"That fee is the business: **we take a basis-point cut of every dollar agents settle through us — so we grow exactly as the agent economy grows.**
+`[Lean in slightly. This is the product.]`
 
-It's all open-source, live on-chain, and funded to mainnet."
+"Mycelium is the on-chain economy for AI agents — **live on Stellar today.**
 
-`[Ansh takes the close]`
+We built a Python-first toolchain — compiler, SDK, CLI — so any developer can deploy agents straight to the blockchain. No Rust.
 
-"Mycelium is the settlement layer for the agentic internet. It's real, it's running, and we'd love for you to build it with us."
+Once they're live, agents discover each other **instantly through our off-chain indexer** — even across millions of agents — lock payments into escrow, settle the moment work is proven, and carry **persistent, portable memory they can verify on-chain.**
 
-`[End card / lower-third: Mycelium · mycelium.isriz.xyz · github · "The settlement layer for the agent economy"]`
+Every step is autonomous. Every step is on the public ledger."
 
 ---
 
-## Speaker split cheat-sheet
+## [0:30–0:45] — WHY IT MATTERS + CLOSE *(Rohan)*
 
-| Time | Section | Lead |
-|---|---|---|
-| 0:00–0:15 | Hook | **Ansh** |
-| 0:15–0:35 | What we built | **Ansh** |
-| 0:35–1:05 | How the loop works | **Rohan** |
-| 1:05–1:23 | The business | **Rohan** |
-| 1:23–1:30 | The close / invitation | **Ansh** |
+`[Steady, matter-of-fact — then lift energy on the last line.]`
 
-- **Why this split:** Ansh opens (vision + product) and closes (the invitation) so the pitch is bookended by the same voice; Rohan owns the middle — the technical loop and the business mechanics. It's a clean two-handoff structure: Ansh → Rohan at 0:35, Rohan → Ansh at the close.
-- **Framing rule:** speak in "we" throughout. This is a two-person team that built it together — Ansh leads the build, Rohan on the engineering with him. Do **not** say or imply one person did all of it; the "we" carries the team story without anyone having to claim or disclaim credit on camera.
+"Every settlement pays a protocol fee — **we grow as the agent economy grows.**
 
-## Delivery notes (talking-head version)
-- **No demo means the loop section carries the weight.** Slow down there. One step per breath. Concrete verbs — "locks," "proves," "releases," "routes to us." Don't rush the fee line; it's the whole pitch.
-- **The verifiability substitute:** you can't show tx hashes, so *say* "it's all on the public ledger — verify it yourself." That sentence replaces the explorer screen. Optionally hold up / point to "github.com/…" on a lower-third.
-- **The two beats that must land:** "live on-chain today" and "a basis-point cut of every settlement." Hit each once, clearly, with a pause after.
-- **Eyeline & energy:** look down the lens on the bold lines. Highest energy on the hook and the fee line. Calm and concrete through the loop — confidence reads as proof when you can't show the screen.
-- **No ask:** close on the product and the invitation ("build it with us"), never a number.
-- **Handoffs (see cheat-sheet):** Ansh → Rohan at `[0:35]` (after "what we built"), Rohan → Ansh at `[1:23]` for the close. Two clean handoffs, nothing fancy — a beat of silence on each so it doesn't feel rushed.
-- **If you run long:** cut the "split it across the swarm" clause — find → lock → prove → release → fee is the irreducible loop.
-- **If you only get one line:** "We built the on-chain economy where AI agents hire and pay each other — and we take a cut of every settlement. It's live on Stellar today."
+Agents need an economy they can trust. We built it, it's open-source, and it's already running. **Mycelium — the settlement layer for the agentic internet.**"
+
+`[Beat. End card / lower-third: Mycelium · mycelium.isriz.xyz · github]`
+
+---
+
+## Speaker split
+
+| Time       | Beat                        | Lead      |
+|------------|-----------------------------|-----------|
+| 0:00–0:08  | Who we are + the problem    | **Ansh**  |
+| 0:08–0:30  | What we're building         | **Ansh**  |
+| 0:30–0:45  | Why it matters + close      | **Rohan** |
+
+- **One handoff:** Ansh → Rohan at 0:30. Clean and simple.
+- **Framing rule:** Always "we." This is a team — never imply one person built it alone.
+
+## Delivery notes
+
+- **Word count is ~115 words.** At a natural 140 wpm that's ≈49 seconds. Leaves a breath for pauses on the bold beats.
+- **Four beats that MUST land:** (1) "no economy," (2) "live on Stellar today," (3) "off-chain indexer … persistent memory," (4) "we grow as the agent economy grows."
+- **No demo means the verbs carry the proof.** "Discover, lock, settle, verify, remember" — concrete, active, one per breath.
+- **If you run long:** Cut "No Rust" and "even across millions of agents." The irreducible core is: problem → product (indexer + memory) → live → fee.
+- **If you only get one line:** "We built the on-chain economy where AI agents discover, hire, pay, and remember each other — it's live on Stellar, and we earn on every settlement."

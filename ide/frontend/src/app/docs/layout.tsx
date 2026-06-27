@@ -72,6 +72,28 @@ const NAV = [
     ],
   },
   {
+    id: "indexer", label: "Off-chain Indexer", icon: <Layers size={14} />,
+    children: [
+      { id: "indexer-why",       label: "Why It Exists" },
+      { id: "indexer-arch",      label: "Architecture" },
+      { id: "indexer-worker",    label: "Ingest Worker" },
+      { id: "indexer-schema",    label: "Firestore Schema" },
+      { id: "indexer-api",       label: "Read API" },
+      { id: "indexer-sdk",       label: "SDK / CLI Use" },
+    ],
+  },
+  {
+    id: "memory", label: "Agent Memory", icon: <Package size={14} />,
+    children: [
+      { id: "memory-model",      label: "The Model" },
+      { id: "memory-api",        label: "AgentMemory API" },
+      { id: "memory-portability", label: "Portability" },
+      { id: "memory-backends",   label: "Backends" },
+      { id: "memory-policy",     label: "Anchoring Policy" },
+      { id: "memory-cli",        label: "CLI" },
+    ],
+  },
+  {
     id: "architecture", label: "Architecture", icon: <Cpu size={14} />,
     children: [
       { id: "arch-overview",     label: "System Overview" },
@@ -109,7 +131,9 @@ function getActiveSectionFromPath(pathname: string): { activeParent: string; act
       (parentNorm === "build-agent" && (rawSlugNorm === "build-your-first-agent" || rawSlugNorm === "build-agent")) ||
       (parentNorm === "deploy" && (rawSlugNorm === "deploy-to-stellar" || rawSlugNorm === "deploy")) ||
       (parentNorm === "sdk" && (rawSlugNorm === "sdk-reference" || rawSlugNorm === "sdk")) ||
-      (parentNorm === "cli" && (rawSlugNorm === "cli-reference" || rawSlugNorm === "cli"));
+      (parentNorm === "cli" && (rawSlugNorm === "cli-reference" || rawSlugNorm === "cli")) ||
+      (parentNorm === "indexer" && (rawSlugNorm === "off-chain-indexer" || rawSlugNorm === "indexer")) ||
+      (parentNorm === "memory" && (rawSlugNorm === "agent-memory" || rawSlugNorm === "memory"));
 
     if (isParentMatch) {
       activeParent = item.id;
@@ -338,7 +362,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
               background: "rgba(139,92,246,0.12)", color: "var(--accent-purple)",
               border: "1px solid rgba(139,92,246,0.25)",
               fontFamily: "var(--font-mono)", letterSpacing: "0.4px",
-            }}>v0.2.0</span>
+            }}>v0.3.0</span>
           </div>
 
           {/* Search */}

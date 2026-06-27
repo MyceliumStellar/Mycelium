@@ -155,6 +155,9 @@ def join(
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
     """Join a swarm job with an agreed bounty share."""
+    if not 0 < share <= 10000:
+        typer.echo(f"Error: --share must be between 1 and 10000 basis points (got {share}).")
+        raise typer.Exit(code=1)
     client = _client(network, wallet, board, signing=True)
     client.join_swarm(job_id, capability, share)
     typer.echo(f"✓ Joined swarm for job #{job_id} ({share} bps, capability '{capability}').")

@@ -45,6 +45,23 @@ def _cosine(a: List[float], b: List[float]) -> float:
     return sum(x * y for x, y in zip(a, b))
 
 
+def canonical_blob(owner: str, records: List[Dict[str, Any]]) -> bytes:
+    """
+    Deterministic, backend-independent serialization of a memory set.
+
+    Records are normalized to `{content, tags(sorted)}` and the LIST is sorted by
+    (content, tags) so the bytes — and therefore the `memory_root` — are identical
+    no matter the insertion order or which backend produced them. That identity is
+    what makes local and Supermemory interchangeable behind one on-chain anchor.
+    """
+    norm = sorted(
+        ({"content": r["content"], "tags": sorted(r.get("tags") or [])} for r in records),
+        key=lambda r: (r["content"], r["tags"]),
+    )
+    return json.dumps({"owner": owner, "records": norm}, sort_keys=True,
+                      separators=(",", ":")).encode("utf-8")
+
+
 class LocalVectorBackend:
     """SQLite-backed local memory store with offline semantic-ish recall."""
 
@@ -97,11 +114,10 @@ class LocalVectorBackend:
 
     # ── portability (blob = canonical, machine-independent) ──────────────────
     def export_blob(self) -> bytes:
-        """Canonical bytes of the committed memory (content+tags, ordered). The
-        thing `AgentMemory` hashes into `memory_root`. Vectors are NOT included —
-        they're recomputed on import — so the blob is identical across machines."""
-        payload = {"owner": self.owner, "records": self.all_records()}
-        return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        """Canonical bytes of the committed memory — the thing `AgentMemory`
+        hashes into `memory_root`. Vectors are NOT included (recomputed on
+        import), so the blob is identical across machines and backends."""
+        return canonical_blob(self.owner, self.all_records())
 
     def import_blob(self, blob: bytes) -> int:
         """Replace local memory with the records in `blob`. Returns record count."""
@@ -179,14 +195,22 @@ class TieredBackend:
 
 class SupermemoryBackend:
     """
-    Managed cloud backend keyed by the agent's G-address as `containerTag`
-    (ROADMAP §4). Same interface as LocalVectorBackend. Requires a Supermemory
-    API key; this is the revenue/scale path. Stub until wired to the API.
+    Managed cloud backend over the real Supermemory API (https://api.supermemory.ai).
+
+    Keyed by the agent's G-address as the `containerTag`, so every agent's memory
+    is isolated by default (ROADMAP §4). Same interface as LocalVectorBackend —
+    `remember` POSTs a document, `recall` runs semantic search, and `export_blob`
+    reconstructs the canonical blob from the cloud so the on-chain `memory_root`
+    matches the local backend's for the same memory set.
+
+    Requires a Supermemory API key (pass `api_key=` or set `SUPERMEMORY_API_KEY`).
     """
 
     name = "supermemory"
+    BASE_URL = "https://api.supermemory.ai"
 
-    def __init__(self, owner: str, api_key: Optional[str] = None):
+    def __init__(self, owner: str, api_key: Optional[str] = None, base_url: Optional[str] = None,
+                 timeout: float = 20.0):
         self.owner = owner
         self.api_key = api_key or os.getenv("SUPERMEMORY_API_KEY")
         if not self.api_key:
@@ -194,6 +218,105 @@ class SupermemoryBackend:
                 "SupermemoryBackend needs a Supermemory API key "
                 "(pass api_key= or set SUPERMEMORY_API_KEY). Use backend='local' for offline."
             )
-        raise NotImplementedError(
-            "SupermemoryBackend is not wired yet — use LocalVectorBackend (backend='local')."
-        )
+        self.base_url = (base_url or os.getenv("SUPERMEMORY_BASE_URL") or self.BASE_URL).rstrip("/")
+        self.timeout = timeout
+
+    def _headers(self):
+        return {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+
+    def _post(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        import requests
+
+        resp = requests.post(f"{self.base_url}{path}", json=body, headers=self._headers(),
+                             timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.json() if resp.content else {}
+
+    def _get(self, path: str) -> Dict[str, Any]:
+        import requests
+
+        resp = requests.get(f"{self.base_url}{path}", headers=self._headers(), timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.json() if resp.content else {}
+
+    @staticmethod
+    def _custom_id(content: str, tags: List[str]) -> str:
+        """Deterministic id so re-ingesting the same memory upserts (no dupes)."""
+        h = hashlib.sha256((content + "\x00" + ",".join(sorted(tags or []))).encode("utf-8"))
+        return "myc-" + h.hexdigest()[:24]
+
+    # ── writes / reads ───────────────────────────────────────────────────────
+    def remember(self, content: str, tags: Optional[List[str]] = None) -> str:
+        tags = sorted(tags or [])
+        body = {
+            "content": content,
+            "containerTags": [self.owner],
+            "metadata": {"mycelium_tags": ",".join(tags)},
+            "customId": self._custom_id(content, tags),
+        }
+        res = self._post("/v3/documents", body)
+        return str(res.get("id") or body["customId"])
+
+    def recall(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
+        res = self._post("/v3/search", {"q": query, "containerTags": [self.owner], "limit": k})
+        out = []
+        for r in (res.get("results") or res.get("documents") or []):
+            content = r.get("content") or r.get("memory") or ""
+            if not content and isinstance(r.get("chunks"), list):
+                content = " ".join(c.get("content", "") for c in r["chunks"])
+            out.append({
+                "content": content,
+                "tags": self._tags_of(r),
+                "score": float(r.get("score", 0.0)),
+            })
+        return out
+
+    @staticmethod
+    def _tags_of(doc: Dict[str, Any]) -> List[str]:
+        meta = doc.get("metadata") or {}
+        raw = meta.get("mycelium_tags", "")
+        return [t for t in raw.split(",") if t] if isinstance(raw, str) else []
+
+    def all_records(self) -> List[Dict[str, Any]]:
+        """
+        Rebuild the canonical record set from the cloud. The list endpoint
+        (`/v3/documents/list`) is page-based and returns the documents under
+        `memories` WITHOUT their `content`; the original text + our tags only
+        come back on a per-document GET, so we list ids then fetch each one.
+        """
+        records: List[Dict[str, Any]] = []
+        page_num = 1
+        while True:
+            body: Dict[str, Any] = {"containerTags": [self.owner], "limit": 200, "page": page_num}
+            page = self._post("/v3/documents/list", body)
+            docs = page.get("memories") or page.get("documents") or page.get("results") or []
+            for d in docs:
+                content = d.get("content")
+                tags = self._tags_of(d)
+                if content is None:  # list omits content → fetch the full document
+                    doc_id = d.get("id") or d.get("customId")
+                    if doc_id:
+                        full = self._get(f"/v3/documents/{doc_id}")
+                        content = full.get("content", "")
+                        tags = self._tags_of(full) or tags
+                records.append({"content": content or "", "tags": tags})
+            pg = page.get("pagination") or {}
+            total_pages = int(pg.get("totalPages") or 0)
+            if not docs or (total_pages and page_num >= total_pages):
+                break
+            page_num += 1
+        return records
+
+    def count(self) -> int:
+        return len(self.all_records())
+
+    # ── portability (same canonical blob as the local backend) ───────────────
+    def export_blob(self) -> bytes:
+        return canonical_blob(self.owner, self.all_records())
+
+    def import_blob(self, blob: bytes) -> int:
+        payload = json.loads(blob.decode("utf-8"))
+        records = payload.get("records", [])
+        for r in records:
+            self.remember(r["content"], r.get("tags", []))  # upserts via customId
+        return len(records)

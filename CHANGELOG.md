@@ -6,6 +6,80 @@ are documented here. The four components are versioned together.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-06-26
+
+The **scale & hardening** release. Two pre-pitch scaling pillars land — an
+**off-chain indexer** that turns agent/job discovery from an O(N) event-scan into
+an O(1) hosted lookup, and **persistent agent memory** (a big mutable off-chain
+store committed on-chain by a tiny, constant-size anchor). Alongside them, the
+money-path and IDE-backend security gaps found in the pre-mainnet audit are
+closed. The compiler is unchanged and stays at `0.2.0`; `mycelium-sdk`,
+`mycelium-cli`, and the `mycelium-stellar` metapackage move to `0.3.0`.
+
+### Security
+- **JobBoard authorization (mainnet blocker).** `submit_proof` now takes a
+  `submitter: Address` and calls `submitter.require_auth()`, asserting the
+  submitter is the recorded single-mode agent or a swarm member (new
+  `ContractError.NOT_CLAIMANT`); `finalize` now calls `poster.require_auth()`.
+  Previously either call was unauthenticated, so an unsigned caller could record
+  a proof and drive a job to escrow release. Propagated through `JobBoardClient`
+  and `mycelium job submit|finalize`; regression tests added.
+- **IDE token encryption no longer derives from the JWT key.** Stored secrets
+  (GitHub tokens, user API keys) are now encrypted with a key derived via
+  HKDF-SHA256 from a **dedicated `TOKEN_ENCRYPTION_KEY`**, independent of
+  `JWT_SECRET_KEY`. The old scheme null-padded `JWT_SECRET_KEY` (shared, no
+  salt), so a JWT-key leak decrypted every credential. Decryption falls back to
+  the legacy key (via `MultiFernet`) so existing credentials keep working and are
+  transparently re-encrypted under the new key on next login.
+- **IDE compute/money endpoints bounded.** `POST /api/deploy` (can fund + deploy,
+  accepts a wallet secret) now requires an authenticated session. `POST /compile`
+  stays public — the CLI's zero-install `mycelium compile --remote` depends on it
+  — but is no longer an unbounded surface: a 256 KiB source cap plus a rolling
+  rate limit (by user id when authenticated, else client IP). CORS tightened from
+  `allow_methods=["*"]` to the methods actually served.
+
+### Added
+- **Off-chain indexer (`indexer/`, Firestore-backed, hosted).** A verifiable
+  cache over full on-chain history (chain stays source-of-truth). `indexer/worker.py`
+  is a cursor-tracked, idempotent ingest loop (re-ingest = overwrite, resume from
+  the cursor doc with no dupes; `--from-ledger N` backfill); `indexer/api.py`
+  serves `GET /agents` (capability + `min_reputation` filters, cursor pagination),
+  `/agents/{name}`, `/jobs`, `/jobs/{id}`, `/memory/{owner}`, `/stats`, each
+  response carrying `source_contract` + `as_of_ledger` for client-side
+  verification. Shared event-scan logic extracted to `mycelium_sdk/events.py`.
+  - **SDK/CLI integration:** `HiveClient.discover_agents(prefer_indexer=True)`
+    uses the hosted indexer and **falls back to the on-chain event-scan** when it
+    is unreachable; `mycelium agents` / `discover` use it when reachable.
+  - Distributed as a **hosted service**, not bundled in the pip metapackage;
+    sovereign self-hosters can `pip install mycelium-stellar[indexer]`.
+- **Persistent agent memory (`mycelium_sdk.memory`, `AgentMemory`).** Big mutable
+  private memory stays off-chain; only a tiny `(memory_root, uri, version)`
+  commitment goes on-chain via the new **MemoryAnchor** contract — so per-agent
+  on-chain footprint is constant regardless of memory size.
+  - `remember` / `recall` (off-chain, no tx); `anchor(uri, publish=)` commits the
+    content root on-chain; `verify()` recomputes and compares to the anchor;
+    `rehydrate()` reads the anchor → fetches the blob → re-hashes → refuses to
+    load on mismatch (tamper/rollback protection).
+  - **Backends behind one interface:** `LocalVectorBackend` (SQLite + zero-dep
+    offline embedder, the OSS default), `SupermemoryBackend` (real
+    `api.supermemory.ai` v3 wiring, keyed by the agent's G-address), and
+    `TieredBackend` (local cache + cloud at once behind one anchor). All export
+    the same canonical blob, so the on-chain root is backend-independent.
+  - **Anchoring policy** (`AnchoringPolicy`): anchor at job-completion
+    (`on_job_complete`) + a throttled `heartbeat` — never per-write (the cost knob).
+  - **CLI:** `mycelium memory remember|recall|anchor|verify|rehydrate|status`.
+  - Portability proven on testnet (`memory_demo.py`): write+anchor on machine A →
+    rehydrate+verify on machine B → tampered blob rejected.
+
+### Changed
+- **Money-path input validation (defense-in-depth; escrow still re-checks
+  on-chain).** `create_locked_escrow` rejects non-positive amounts, sub-stroop
+  amounts, and amounts above the i128 ceiling **before** deploying anything;
+  `post_job` rejects non-positive / sub-stroop bounties; `split_release` rejects
+  empty share lists and non-positive basis points; `join_swarm` (SDK + `mycelium
+  job join`) validates `0 < share_bps <= 10000` client-side. `list_open_jobs`
+  now logs skipped jobs at debug instead of silently swallowing errors.
+
 ## [0.2.0] — 2026-06-23
 
 The Sovereign Job Boards release: post tasks on-chain, have single agents or

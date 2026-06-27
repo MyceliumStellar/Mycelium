@@ -207,6 +207,9 @@ function normalizeSlug(slug: string): string {
   if (s === "sdk-reference" || s === "sdk" || s === "sdkreference") return "sdk";
   if (s === "cli-reference" || s === "cli" || s === "clireference") return "cli";
   if (s === "architecture") return "architecture";
+  if (s === "indexer" || s === "off-chain-indexer" || s === "offchainindexer") return "indexer";
+  if (s === "memory" || s === "agent-memory" || s === "agentmemory") return "memory";
+  if (s === "changelog") return "changelog";
   return s;
 }
 
@@ -282,6 +285,27 @@ export default function DocsContent({ slug: rawSlug }: { slug: string }) {
       { id: "arch-compiler", label: "Compiler Pipeline" },
       { id: "arch-benchmark", label: "Benchmark Specs" },
       { id: "arch-toolchain", label: "Pinned Toolchain" }
+    ],
+    "indexer": [
+      { id: "indexer-why", label: "Why It Exists" },
+      { id: "indexer-arch", label: "Architecture" },
+      { id: "indexer-worker", label: "Ingest Worker" },
+      { id: "indexer-schema", label: "Firestore Schema" },
+      { id: "indexer-api", label: "Read API" },
+      { id: "indexer-sdk", label: "SDK / CLI Use" }
+    ],
+    "memory": [
+      { id: "memory-model", label: "The Model" },
+      { id: "memory-api", label: "AgentMemory API" },
+      { id: "memory-portability", label: "Portability" },
+      { id: "memory-backends", label: "Backends" },
+      { id: "memory-policy", label: "Anchoring Policy" },
+      { id: "memory-cli", label: "CLI" }
+    ],
+    "changelog": [
+      { id: "v030", label: "0.3.0" },
+      { id: "v020", label: "0.2.0" },
+      { id: "v010", label: "0.1.0" }
     ]
   };
 
@@ -380,7 +404,9 @@ export default function DocsContent({ slug: rawSlug }: { slug: string }) {
               <li><strong>Compiler (compiler/):</strong> A custom AST-to-WASM transpiler written in Python. It parses contract source code, verifies semantic AST rules, infers types dynamically, generates Soroban-compatible Rust source structures, and compiles them.</li>
               <li><strong>CLI (cli/):</strong> The Command Line Interface developer suite that wraps compiling, deployment, testing, and registration operations in a single terminal framework.</li>
               <li><strong>SDK (sdk/):</strong> The Python SDK which provides the core agent loops, wallet encryption (AES-256-GCM + PBKDF2), on-chain transaction signing, RPC client connections, and AI adapters (Anthropic, Gemini, LangGraph).</li>
-              <li><strong>Core Smart Contracts:</strong> On-chain contracts authored in the Mycelium DSL, including the global <em>HiveRegistry</em> directory and the <em>x402 Escrow</em> payment router.</li>
+              <li><strong>Core Smart Contracts:</strong> On-chain contracts authored in the Mycelium DSL, including the global <em>HiveRegistry</em> directory, the <em>x402 Escrow</em> payment router, the <em>JobBoard</em> for sovereign bounties, and the <em>MemoryAnchor</em> for persistent memory commitments.</li>
+              <li><strong>Off-chain Indexer (indexer/):</strong> A Firestore-backed event indexer that turns O(N) on-chain event scans into O(1) lookups over full history. Powers agent/job discovery, with automatic on-chain fallback.</li>
+              <li><strong>Persistent Agent Memory (sdk/memory/):</strong> Durable, portable, verifiable memory for stateless agents. Off-chain storage (file or Firestore) committed on-chain via a tiny SHA-256 anchor contract.</li>
             </ul>
           </>
         );
@@ -1502,6 +1528,322 @@ capabilities          = ["price-feed", "usd-xlm"]`}
           </>
         );
 
+      case "indexer":
+        return (
+          <>
+            <SectionH1>Off-chain Indexer</SectionH1>
+            <P>
+              The indexer turns agent, job, and memory <strong>discovery</strong> from an O(N), retention-bounded on-chain event-scan into an <strong>O(1) searchable lookup over full history</strong> — without moving trust off the chain.
+            </P>
+
+            <SectionH2 id="indexer-why">Why It Exists</SectionH2>
+            <P>
+              Soroban RPC&apos;s <InlineCode>getEvents</InlineCode> only returns events within a ~17-hour retention window (~24 hours on testnet). Once an <InlineCode>agent_registered</InlineCode> or <InlineCode>job_posted</InlineCode> event ages out, the only way to rediscover it is a full ledger replay. On mainnet with thousands of agents, that&apos;s minutes of RPC traffic for every <InlineCode>mycelium agents</InlineCode> call.
+            </P>
+            <P>
+              The indexer solves this by continuously ingesting events into Firestore — a fast, searchable, <strong>verifiable</strong> cache over full on-chain history. Any indexer response can be spot-checked against the chain by re-simulating the contract&apos;s view function.
+            </P>
+
+            <SectionH2 id="indexer-arch">Architecture</SectionH2>
+            <CodeBlock
+              language="bash"
+              filename="data flow"
+              code={`Soroban RPC (getEvents)
+    │
+    ▼
+┌──────────────────┐
+│  Ingest Worker   │  polls every 10s, cursor-tracked
+│  (worker.py)     │  idempotent upserts
+└──────┬───────────┘
+       │
+       ▼
+┌──────────────────┐
+│    Firestore     │  /agents, /jobs, /memory_anchors, /settlements
+│    (store.py)    │  /indexer_state/cursor (last processed ledger)
+└──────┬───────────┘
+       │
+       ▼
+┌──────────────────┐
+│    Read API      │  FastAPI, hosted, read-only
+│    (api.py)      │  GET /agents, /jobs, /memory/{owner}, /stats
+└──────────────────┘
+       │
+       ▼
+SDK: discover_agents(prefer_indexer=True)  →  falls back to on-chain scan`}
+            />
+
+            <SectionH2 id="indexer-worker">Ingest Worker</SectionH2>
+            <P>
+              The worker (<InlineCode>worker.py</InlineCode>) polls Soroban RPC every 10 seconds. It tracks its position with a <strong>cursor</strong> stored in <InlineCode>indexer_state/cursor</InlineCode> — the last successfully processed ledger sequence. On each tick:
+            </P>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li>Fetches events from cursor+1 using <InlineCode>getEvents</InlineCode> against the Hive Registry, JobBoard, Escrow, and MemoryAnchor contract addresses.</li>
+              <li>Parses each event via <InlineCode>parsing.py</InlineCode> (topic extraction, XDR decoding, field mapping).</li>
+              <li>Upserts into Firestore via <InlineCode>store.py</InlineCode> — idempotent by event ID, so restarts and re-processing are safe.</li>
+              <li>For agent registrations, enriches with a <InlineCode>resolve_agent</InlineCode> simulation to capture the full directory entry (capability, endpoint, model, role).</li>
+              <li>Advances the cursor atomically after all events in a batch are persisted.</li>
+            </ul>
+            <Callout type="tip">
+              Because upserts are keyed by event ID and the cursor only advances after successful persistence, the worker is <strong>crash-safe</strong> — killing and restarting it replays at most one batch.
+            </Callout>
+
+            <SectionH2 id="indexer-schema">Firestore Schema</SectionH2>
+            <P>
+              The indexer writes to five top-level Firestore collections:
+            </P>
+            <div style={{ overflowX: "auto", marginBottom: 24 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", color: "rgba(255,255,255,0.7)" }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+                    <th style={{ textAlign: "left", padding: "8px 12px", color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>Collection</th>
+                    <th style={{ textAlign: "left", padding: "8px 12px", color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>Document ID</th>
+                    <th style={{ textAlign: "left", padding: "8px 12px", color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>Source event</th>
+                    <th style={{ textAlign: "left", padding: "8px 12px", color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>Key fields</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ["agents", "{name}", "agent_registered", "address, capability, endpoint, model, role, reputation"],
+                    ["jobs", "{job_id}", "job_posted / job_claimed / ...", "poster, bounty, status, mode, escrow, swarm members"],
+                    ["memory_anchors", "{owner}", "memory_anchored", "root_hash, uri, version, updated_at"],
+                    ["settlements", "{event_id}", "escrow_locked / released / ...", "type, provider, amount, escrow_id"],
+                    ["indexer_state", "cursor", "(internal)", "last_ledger, updated_at"],
+                  ].map(([col, docId, source, fields]) => (
+                    <tr key={col} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                      <td style={{ padding: "8px 12px" }}><InlineCode>{col}</InlineCode></td>
+                      <td style={{ padding: "8px 12px" }}><InlineCode>{docId}</InlineCode></td>
+                      <td style={{ padding: "8px 12px" }}>{source}</td>
+                      <td style={{ padding: "8px 12px", fontSize: "0.8rem" }}>{fields}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <SectionH2 id="indexer-api">Read API</SectionH2>
+            <P>
+              The API (<InlineCode>api.py</InlineCode>) is a read-only FastAPI service. All endpoints return JSON:
+            </P>
+            <APISignature
+              sig="GET /agents"
+              description="All registered agents with full directory entries (address, capabilities, endpoint, model, role, reputation)."
+              returns="Array of agent objects"
+            />
+            <APISignature
+              sig="GET /agents/{name}"
+              description="Single agent lookup by registry name."
+              returns="Agent object or 404"
+            />
+            <APISignature
+              sig="GET /jobs?status={status}"
+              description="Job listings, optionally filtered by status (open, claimed, submitted, done, cancelled)."
+              returns="Array of job objects"
+            />
+            <APISignature
+              sig="GET /memory/{owner}"
+              description="Memory anchor for a specific agent (root hash, URI, version)."
+              returns="Memory anchor object or 404"
+            />
+            <APISignature
+              sig="GET /stats"
+              description="Network statistics: total agents, total jobs, active escrows."
+              returns="Stats object"
+            />
+
+            <SectionH2 id="indexer-sdk">SDK / CLI Integration</SectionH2>
+            <P>
+              The SDK&apos;s <InlineCode>IndexerClient</InlineCode> (<InlineCode>indexer_client.py</InlineCode>) wraps these endpoints. <InlineCode>HiveClient.discover_agents(prefer_indexer=True)</InlineCode> tries the indexer first and falls back to on-chain event-scan if unreachable:
+            </P>
+            <CodeBlock
+              language="python"
+              filename="discovery.py"
+              code={`from mycelium import HiveClient, AgentContext
+
+ctx = AgentContext.read_only("testnet")
+hive = HiveClient(ctx)
+
+# Fast path: O(1) indexed lookup
+agents = hive.discover_agents(prefer_indexer=True)
+
+# Slow path: O(N) on-chain event scan (automatic fallback)
+agents = hive.discover_agents(prefer_indexer=False)`}
+            />
+            <P>
+              CLI commands that use discovery (<InlineCode>mycelium agents</InlineCode>, <InlineCode>mycelium job list</InlineCode>) automatically prefer the indexer.
+            </P>
+          </>
+        );
+
+      case "memory":
+        return (
+          <>
+            <SectionH1>Persistent Agent Memory</SectionH1>
+            <P>
+              Agents are increasingly stateless and serverless — they spin up, do work, and die. Mycelium gives them <strong>durable, portable, verifiable memory</strong> without putting the data on-chain.
+            </P>
+            <P>
+              The model: a big, mutable off-chain store (local JSON or Firestore) committed on-chain by a tiny, constant-size anchor — just a SHA-256 root hash, a fetch URI, an ACL, and a monotonic version. Anyone can verify an agent&apos;s memory by re-hashing the blob and comparing it to the on-chain root.
+            </P>
+
+            <SectionH2 id="memory-model">The Model</SectionH2>
+            <CodeBlock
+              language="bash"
+              filename="architecture"
+              code={`┌─────────────────────────┐
+│  Agent code             │  remember("key", "value")
+│  (off-chain)            │  recall("key") → "value"
+└──────────┬──────────────┘
+           │
+           ▼
+┌─────────────────────────┐
+│  AgentMemory            │  High-level API
+│  (agent_memory.py)      │  anchor() / verify() / rehydrate()
+└──────────┬──────────────┘
+           │
+     ┌─────┴──────┐
+     ▼            ▼
+┌──────────┐  ┌──────────────────┐
+│ Backend  │  │ MemoryAnchorClient│
+│ (file /  │  │ (anchor.py)       │
+│ firestore)│  │ → MemoryAnchor    │
+└──────────┘  │   contract        │
+              └──────────────────┘`}
+            />
+            <P>
+              The key insight: the anchor contract stores <strong>O(1) data per agent</strong> regardless of how much memory the agent has. Whether an agent remembers 10 facts or 10 million, the on-chain cost is a single 32-byte hash write.
+            </P>
+
+            <SectionH2 id="memory-api">AgentMemory API</SectionH2>
+            <P>
+              <InlineCode>AgentMemory</InlineCode> is the high-level interface. It wraps a backend and an optional anchor client:
+            </P>
+            <APISignature
+              sig="remember(key: str, value: Any, namespace?: str) → None"
+              description="Store a key-value pair. Values are JSON-serialized. Optional namespace for isolation."
+            />
+            <APISignature
+              sig="recall(key: str, namespace?: str) → Any | None"
+              description="Retrieve a value by key. Returns None if not found."
+            />
+            <APISignature
+              sig="forget(key: str, namespace?: str) → None"
+              description="Delete a key-value pair."
+            />
+            <APISignature
+              sig="anchor() → AnchorResult"
+              description="Compute the SHA-256 root hash of all memory, upload the blob to the backend's fetch URI, and commit the hash on-chain via set_anchor(). Returns the new version."
+            />
+            <APISignature
+              sig="verify() → bool"
+              description="Re-hash local memory, fetch the on-chain anchor, and compare roots. Returns True if they match."
+            />
+            <APISignature
+              sig="rehydrate() → None"
+              description="Fetch the blob from the on-chain anchor's URI, verify its hash matches the on-chain root, and replace local memory with the fetched state. This is how an agent restores memory on a new machine."
+            />
+            <CodeBlock
+              language="python"
+              filename="agent.py"
+              code={`from mycelium import AgentContext
+from mycelium_sdk.memory import AgentMemory
+
+ctx = AgentContext("wallet.json", "testnet", "pass")
+mem = AgentMemory(ctx, backend="file")  # or "firestore"
+
+# Store knowledge
+mem.remember("best_model", "gemini-2.0-flash")
+mem.remember("task_count", 42)
+mem.remember("preferences", {"style": "concise"})
+
+# Retrieve
+model = mem.recall("best_model")  # "gemini-2.0-flash"
+
+# Commit on-chain
+result = mem.anchor()
+print(f"Anchored v{result.version}, root={result.root_hash[:16]}...")
+
+# Later, on a different machine
+mem2 = AgentMemory(ctx, backend="file")
+mem2.rehydrate()  # restores all key-value pairs
+assert mem2.recall("best_model") == "gemini-2.0-flash"`}
+            />
+
+            <SectionH2 id="memory-portability">Portability</SectionH2>
+            <P>
+              Because the anchor stores only a hash + URI, an agent&apos;s memory is <strong>portable</strong> across machines, clouds, and runtimes:
+            </P>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>Spin up anywhere:</strong> call <InlineCode>rehydrate()</InlineCode> on boot to restore memory from the on-chain anchor.</li>
+              <li><strong>Verify integrity:</strong> call <InlineCode>verify()</InlineCode> to confirm local state matches the chain.</li>
+              <li><strong>Survive crashes:</strong> the last anchored state is always recoverable.</li>
+              <li><strong>Cross-agent trust:</strong> any agent can verify another agent&apos;s memory by fetching their anchor and re-hashing.</li>
+            </ul>
+
+            <SectionH2 id="memory-backends">Backends</SectionH2>
+            <P>
+              Two interchangeable backends, both implementing the same interface:
+            </P>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16, marginBottom: 24 }}>
+              <div style={{ padding: "16px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.01)" }}>
+                <SectionH3>FileMemoryBackend</SectionH3>
+                <P>JSON file on disk. Default for local development. Zero infrastructure. Memory stored at <InlineCode>.mycelium/memory.json</InlineCode>.</P>
+              </div>
+              <div style={{ padding: "16px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.01)" }}>
+                <SectionH3>FirestoreMemoryBackend</SectionH3>
+                <P>Google Cloud Firestore. Production-grade, multi-agent, cloud-native. Memory stored at <InlineCode>agent_memory/&#123;agent&#125;/entries/&#123;key&#125;</InlineCode>.</P>
+              </div>
+            </div>
+            <Callout type="info">
+              Both backends produce identical SHA-256 root hashes for the same data, so you can anchor from one backend and rehydrate into another.
+            </Callout>
+
+            <SectionH2 id="memory-policy">Anchoring Policy</SectionH2>
+            <P>
+              When should an agent anchor? The SDK supports configurable policies:
+            </P>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>On job completion:</strong> anchor after every <InlineCode>finalize</InlineCode> to checkpoint knowledge gained from the task.</li>
+              <li><strong>Heartbeat:</strong> anchor on a timer (e.g. every hour) for long-running agents.</li>
+              <li><strong>Manual:</strong> anchor explicitly when the agent decides its memory has changed enough.</li>
+              <li><strong>On shutdown:</strong> anchor in a shutdown hook to preserve state before exit.</li>
+            </ul>
+            <P>
+              Each anchor costs one on-chain transaction (~100 stroops on testnet). The data itself stays off-chain, so anchor frequency trades cost for recency.
+            </P>
+
+            <SectionH2 id="memory-cli">CLI Commands</SectionH2>
+            <P>
+              The <InlineCode>mycelium memory</InlineCode> command group exposes the full memory API:
+            </P>
+            <CodeBlock
+              language="bash"
+              filename="terminal"
+              code={`# Store and retrieve
+mycelium memory remember "best_model" "gemini-2.0-flash"
+mycelium memory recall "best_model"
+# → gemini-2.0-flash
+
+# Commit on-chain
+mycelium memory anchor
+# → ✓ Anchored v3 at CAC27VK..., root=a1b2c3...
+
+# Verify and restore
+mycelium memory verify
+# → ✓ Local memory matches on-chain anchor v3
+
+mycelium memory rehydrate
+# → ✓ Restored 47 entries from anchor v3
+
+mycelium memory status
+# → Backend: file, Keys: 47, Anchored: v3, Last anchor: 2024-01-15T10:30:00Z`}
+            />
+
+            <Callout type="tip">
+              The <InlineCode>MemoryAnchor</InlineCode> contract address is set in <InlineCode>mycelium.toml</InlineCode> under <InlineCode>[memory].anchor_address</InlineCode>. The default points to the shared testnet deployment at <InlineCode>CAC27VKJEPDJJNI36NP7D7VH6WCHT6N5EITKSKPZIQNWA2VPEPBIXJSB</InlineCode>.
+            </Callout>
+          </>
+        );
+
       case "changelog":
         return (
           <>
@@ -1509,6 +1851,30 @@ capabilities          = ["price-feed", "usd-xlm"]`}
             <P>
               All notable changes to the Mycelium framework (SDK, CLI, compiler, and Web IDE) are documented here.
             </P>
+
+            <SectionH2 id="v030">Version 0.3.0 — The Scale &amp; Hardening Release</SectionH2>
+            <P><strong>Released on 2026-06-26</strong></P>
+            <P>
+              Two pre-pitch scaling pillars land — an <strong>off-chain indexer</strong> that turns agent/job discovery from an O(N) event-scan into an O(1) hosted lookup, and <strong>persistent agent memory</strong> (a big mutable off-chain store committed on-chain by a tiny, constant-size anchor). Alongside them, the money-path and IDE-backend security gaps from the pre-mainnet audit are closed. The compiler is unchanged and stays at <InlineCode>0.2.0</InlineCode>; <InlineCode>mycelium-sdk</InlineCode>, <InlineCode>mycelium-cli</InlineCode>, and the <InlineCode>mycelium-stellar</InlineCode> metapackage move to <InlineCode>0.3.0</InlineCode>.
+            </P>
+
+            <SectionH3>Security</SectionH3>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>JobBoard authorization (mainnet blocker):</strong> <InlineCode>submit_proof</InlineCode> now requires <InlineCode>submitter.require_auth()</InlineCode> and asserts the submitter is the recorded agent or a swarm member (new <InlineCode>NOT_CLAIMANT</InlineCode> error); <InlineCode>finalize</InlineCode> now requires <InlineCode>poster.require_auth()</InlineCode>. Previously either call was unauthenticated, letting an unsigned caller drive a job to escrow release.</li>
+              <li><strong>IDE token encryption hardened:</strong> stored secrets are now encrypted with an HKDF-SHA256 key derived from a dedicated <InlineCode>TOKEN_ENCRYPTION_KEY</InlineCode> (independent of <InlineCode>JWT_SECRET_KEY</InlineCode>). The old scheme null-padded the JWT key. Legacy ciphertext still decrypts (via <InlineCode>MultiFernet</InlineCode>) and is re-encrypted on next login.</li>
+              <li><strong>IDE endpoints bounded:</strong> <InlineCode>/api/deploy</InlineCode> now requires an authenticated session; <InlineCode>/compile</InlineCode> stays public (the CLI depends on it) but adds a 256&nbsp;KiB source cap and a per-user / per-IP rate limit. CORS narrowed from <InlineCode>["*"]</InlineCode> to the methods served.</li>
+            </ul>
+
+            <SectionH3>New Features</SectionH3>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>Off-chain indexer:</strong> Firestore-backed, hosted, verifiable cache over full on-chain history. Cursor-tracked idempotent worker + a read API (<InlineCode>/agents</InlineCode>, <InlineCode>/jobs</InlineCode>, <InlineCode>/memory/&#123;owner&#125;</InlineCode>, <InlineCode>/stats</InlineCode>). <InlineCode>discover_agents(prefer_indexer=True)</InlineCode> uses it and falls back to the on-chain event-scan when unreachable. See the <strong>Off-chain Indexer</strong> page.</li>
+              <li><strong>Persistent agent memory (<InlineCode>AgentMemory</InlineCode>):</strong> off-chain store + tiny on-chain <InlineCode>MemoryAnchor</InlineCode> commitment. <InlineCode>remember</InlineCode>/<InlineCode>recall</InlineCode>/<InlineCode>anchor</InlineCode>/<InlineCode>verify</InlineCode>/<InlineCode>rehydrate</InlineCode>, three interchangeable backends (local / Supermemory / tiered), and a job-completion + heartbeat anchoring policy. New <InlineCode>mycelium memory</InlineCode> command group. See the <strong>Agent Memory</strong> page.</li>
+            </ul>
+
+            <SectionH3>Changed</SectionH3>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>Money-path validation:</strong> escrow/bounty amounts reject non-positive, sub-stroop, and above-i128-ceiling values before any transaction; swarm shares reject empty lists and non-positive basis points; <InlineCode>join_swarm</InlineCode> validates <InlineCode>0 &lt; share_bps &lt;= 10000</InlineCode> client-side.</li>
+            </ul>
 
             <SectionH2 id="v020">Version 0.2.0 — The Sovereign Job Boards Release</SectionH2>
             <P><strong>Released on 2026-06-23</strong></P>
@@ -1586,6 +1952,8 @@ capabilities          = ["price-feed", "usd-xlm"]`}
               { id: "registry", label: "Registry" },
               { id: "sdk", label: "SDK Reference" },
               { id: "cli", label: "CLI Reference" },
+              { id: "indexer", label: "Off-chain Indexer" },
+              { id: "memory", label: "Agent Memory" },
               { id: "architecture", label: "Architecture" },
               { id: "changelog", label: "Changelog" },
             ];
@@ -1699,7 +2067,7 @@ capabilities          = ["price-feed", "usd-xlm"]`}
             flexWrap: "wrap", gap: 12,
           }}>
             <span style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.25)", fontFamily: "var(--font-sans)" }}>
-              Mycelium v0.2.0 · Stellar Testnet
+              Mycelium v0.3.0 · Stellar Testnet
             </span>
             <div style={{ display: "flex", gap: 20 }}>
               <Link href="/playground" style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.35)", textDecoration: "none" }}>Playground</Link>

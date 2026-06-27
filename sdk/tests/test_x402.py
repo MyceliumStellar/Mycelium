@@ -104,6 +104,49 @@ def test_split_release_rejects_unbalanced_shares():
         EscrowPaymentRouter(ctx).split_release("CESCROW", [("CPROV1", 6000), ("CPROV2", 3000)], b"p")
 
 
+# ── P3: money-path validation (reject early, before any tx) ──────────────────
+@pytest.mark.parametrize("bad_amount", ["0", "-1", "-0.5"])
+def test_create_locked_escrow_rejects_non_positive_amount(monkeypatch, bad_amount):
+    ctx = _FakeContext()
+    router = EscrowPaymentRouter(ctx)
+    monkeypatch.setattr(router, "_deploy_escrow_instance", lambda: "CESCROWID")
+    with pytest.raises(ValueError):
+        router.create_locked_escrow("CPROVIDER", Decimal(bad_amount), b"taskhash")
+    assert ctx.calls == []  # nothing deployed or locked
+
+
+def test_create_locked_escrow_rejects_above_i128_ceiling(monkeypatch):
+    ctx = _FakeContext()
+    router = EscrowPaymentRouter(ctx)
+    monkeypatch.setattr(router, "_deploy_escrow_instance", lambda: "CESCROWID")
+    huge = Decimal(settlement.I128_MAX)  # already in XLM → ×1e7 blows past i128
+    with pytest.raises(ValueError):
+        router.create_locked_escrow("CPROVIDER", huge, b"taskhash")
+    assert ctx.calls == []
+
+
+def test_create_locked_escrow_rejects_substroop_amount(monkeypatch):
+    ctx = _FakeContext()
+    router = EscrowPaymentRouter(ctx)
+    monkeypatch.setattr(router, "_deploy_escrow_instance", lambda: "CESCROWID")
+    with pytest.raises(ValueError):
+        router.create_locked_escrow("CPROVIDER", Decimal("0.00000001"), b"taskhash")  # < 1 stroop
+
+
+def test_split_release_rejects_non_positive_bps():
+    ctx = _FakeContext()
+    with pytest.raises(ValueError):
+        EscrowPaymentRouter(ctx).split_release(
+            "CESCROW", [("CPROV1", 10000), ("CPROV2", 0)], b"p"
+        )
+
+
+def test_split_release_rejects_empty_shares():
+    ctx = _FakeContext()
+    with pytest.raises(ValueError):
+        EscrowPaymentRouter(ctx).split_release("CESCROW", [], b"p")
+
+
 def test_refund_calls_refund():
     ctx = _FakeContext()
     EscrowPaymentRouter(ctx).refund("CESCROW")
