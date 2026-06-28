@@ -250,8 +250,8 @@ a:hover {
 }
 
 .premium-button-primary:hover {
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 0 32px rgba(255, 255, 255, 0.22), 0 4px 20px rgba(0, 0, 0, 0.35);
   transform: scale(1.02);
 }
 
@@ -271,8 +271,9 @@ a:hover {
 }
 
 .premium-button-secondary:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
   transform: scale(1.02);
 }
 
@@ -320,9 +321,14 @@ a:hover {
   100% { transform: translateX(100%); }
 }
 
+@keyframes eyebrow-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.35; transform: scale(0.75); }
+}
+
 .glow-orb-cyan {
-  background: radial-gradient(circle, rgba(0, 150, 199, 0.07) 0%, transparent 70%);
-  filter: blur(80px);
+  background: radial-gradient(circle, rgba(0, 150, 199, 0.13) 0%, transparent 62%);
+  filter: blur(55px);
   animation: orb-breathe 7s ease-in-out infinite;
 }
 
@@ -331,11 +337,17 @@ a:hover {
   filter: blur(80px);
 }
 
+.glow-orb-purple-hero {
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.1) 0%, transparent 62%);
+  filter: blur(70px);
+  animation: orb-breathe 9s ease-in-out infinite reverse;
+}
+
 /* ─── Bento Feature Grid ─── */
 .bento-feature-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  gap: 16px;
 }
 
 @media (max-width: 900px) {
@@ -361,19 +373,56 @@ a:hover {
   background: #08080a;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 12px;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  position: relative;
 }
-.card-flat:hover { border-color: rgba(255, 255, 255, 0.14); }
-.card-flat.card-accent-cyan   { border-top: 1.5px solid var(--accent-cyan); }
-.card-flat.card-accent-purple { border-top: 1.5px solid var(--accent-purple); }
+.card-flat:hover {
+  border-color: rgba(255, 255, 255, 0.13);
+  box-shadow: 0 8px 40px -16px rgba(0, 0, 0, 0.7);
+}
+
+/* Gradient top border for cyan accent cards */
+.card-flat.card-accent-cyan { border-top: none; }
+.card-flat.card-accent-cyan::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, var(--accent-cyan) 28%, var(--accent-cyan) 72%, transparent 100%);
+  pointer-events: none;
+  border-radius: 12px 12px 0 0;
+}
+.card-flat.card-accent-cyan:hover {
+  border-color: rgba(0, 150, 199, 0.2);
+  box-shadow: 0 20px 50px -20px rgba(0, 150, 199, 0.22);
+}
+
+/* Gradient top border for purple accent cards */
+.card-flat.card-accent-purple { border-top: none; }
+.card-flat.card-accent-purple::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, var(--accent-purple) 28%, var(--accent-purple) 72%, transparent 100%);
+  pointer-events: none;
+  border-radius: 12px 12px 0 0;
+}
+.card-flat.card-accent-purple:hover {
+  border-color: rgba(139, 92, 246, 0.18);
+  box-shadow: 0 20px 50px -20px rgba(139, 92, 246, 0.22);
+}
 
 .card-terminal {
   background: #000;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
-.card-terminal:hover { border-color: rgba(255, 255, 255, 0.18); }
+.card-terminal:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 32px -12px rgba(0, 150, 199, 0.12);
+}
 
 /* ─── Editorial Divider ─── */
 .divider-label {
@@ -408,6 +457,11 @@ a:hover {
 .tag-chip-cyan {
   background: rgba(0, 150, 199, 0.08);
   border-color: rgba(0, 150, 199, 0.18);
+  color: rgba(255, 255, 255, 0.6);
+}
+.tag-chip-purple {
+  background: rgba(139, 92, 246, 0.08);
+  border-color: rgba(139, 92, 246, 0.18);
   color: rgba(255, 255, 255, 0.6);
 }
 

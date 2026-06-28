@@ -50,14 +50,25 @@ export default function Home() {
         zIndex: 0
       }} />
 
-      {/* Orb — CSS orb-breathe keyframe handles the pulse */}
+      {/* Primary cyan orb — top center */}
       <div className="glow-orb-cyan" style={{
         position: "absolute",
         top: "-80px",
         left: "50%",
         transform: "translateX(-50%)",
-        width: "700px",
-        height: "500px",
+        width: "750px",
+        height: "560px",
+        pointerEvents: "none",
+        zIndex: 1
+      }} />
+
+      {/* Atmospheric purple orb — top right */}
+      <div className="glow-orb-purple-hero" style={{
+        position: "absolute",
+        top: "60px",
+        right: "-120px",
+        width: "480px",
+        height: "520px",
         pointerEvents: "none",
         zIndex: 1
       }} />
@@ -158,9 +169,13 @@ export default function Home() {
               fontWeight: 800,
               lineHeight: "1.04",
               letterSpacing: "-0.055em",
-              color: "#ffffff",
               marginBottom: "36px",
-              fontFamily: "var(--font-display)"
+              fontFamily: "var(--font-display)",
+              background: "linear-gradient(175deg, #ffffff 40%, rgba(255,255,255,0.72) 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+              color: "#ffffff"
             }}
           >
             Every Agent Needs<br />a Wallet.
@@ -176,7 +191,15 @@ export default function Home() {
           >
             <span>Python-first</span>
             <span>Stellar Soroban</span>
-            <span>v0.2.0</span>
+            <span style={{
+              background: "rgba(0, 150, 199, 0.12)",
+              border: "1px solid rgba(0, 150, 199, 0.28)",
+              borderRadius: "4px",
+              padding: "2px 8px",
+              color: "var(--accent-cyan)",
+              letterSpacing: "1px",
+              fontSize: "0.58rem"
+            }}>v0.2.0</span>
           </motion.div>
 
           {/* Subheadline */}
@@ -291,6 +314,16 @@ export default function Home() {
           style={{ width: "100%", padding: "0 12px", position: "relative", zIndex: 20 }}
         >
           <InteractiveTerminal />
+          <div style={{
+            position: "absolute",
+            bottom: "-40px",
+            left: "15%",
+            right: "15%",
+            height: "80px",
+            background: "radial-gradient(ellipse, rgba(0, 150, 199, 0.14) 0%, transparent 70%)",
+            filter: "blur(18px)",
+            pointerEvents: "none"
+          }} />
         </motion.div>
       </section>
 
@@ -317,9 +350,20 @@ export default function Home() {
               textTransform: "uppercase",
               letterSpacing: "3px",
               fontWeight: "bold",
-              display: "block",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
               marginBottom: "18px"
             }}>
+              <span style={{
+                display: "inline-block",
+                width: "5px", height: "5px",
+                borderRadius: "50%",
+                backgroundColor: "var(--accent-purple)",
+                flexShrink: 0,
+                animation: "eyebrow-pulse 2.5s ease-in-out infinite"
+              }} />
               AGENT STACK
             </span>
             <h2 className="font-display" style={{
@@ -372,9 +416,20 @@ export default function Home() {
               textTransform: "uppercase",
               letterSpacing: "3px",
               fontWeight: "bold",
-              display: "block",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
               marginBottom: "16px"
             }}>
+              <span style={{
+                display: "inline-block",
+                width: "5px", height: "5px",
+                borderRadius: "50%",
+                backgroundColor: "var(--accent-cyan)",
+                flexShrink: 0,
+                animation: "eyebrow-pulse 2.5s ease-in-out infinite 0.6s"
+              }} />
               FEATURES
             </span>
             <h2 className="font-display" style={{
@@ -409,7 +464,7 @@ export default function Home() {
               variants={inView}
               transition={inViewTransition(0)}
               whileHover={{ y: -6, transition: { type: "spring", stiffness: 320, damping: 22 } }}
-              style={{ padding: "36px" }}
+              style={{ padding: "36px", background: "linear-gradient(135deg, rgba(0, 150, 199, 0.06) 0%, #08080a 55%)" }}
             >
               <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "18px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -444,7 +499,7 @@ export default function Home() {
               variants={inView}
               transition={inViewTransition(0.08)}
               whileHover={{ y: -6, transition: { type: "spring", stiffness: 320, damping: 22 } }}
-              style={{ padding: "30px" }}
+              style={{ padding: "30px", background: "linear-gradient(160deg, rgba(0, 150, 199, 0.04) 0%, #000 65%)" }}
             >
               <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "20px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -499,7 +554,7 @@ export default function Home() {
               variants={inView}
               transition={inViewTransition(0.14)}
               whileHover={{ y: -5, transition: { type: "spring", stiffness: 320, damping: 22 } }}
-              style={{ padding: "28px" }}
+              style={{ padding: "28px", background: "linear-gradient(135deg, rgba(139, 92, 246, 0.07) 0%, #08080a 55%)" }}
             >
               <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "14px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -537,7 +592,7 @@ export default function Home() {
               variants={inView}
               transition={inViewTransition(0.2)}
               whileHover={{ y: -5, transition: { type: "spring", stiffness: 320, damping: 22 } }}
-              style={{ padding: "28px" }}
+              style={{ padding: "28px", background: "linear-gradient(135deg, rgba(0, 150, 199, 0.03) 0%, #08080a 60%)" }}
             >
               <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "14px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -575,7 +630,7 @@ export default function Home() {
               variants={inView}
               transition={inViewTransition(0.08)}
               whileHover={{ y: -5, transition: { type: "spring", stiffness: 320, damping: 22 } }}
-              style={{ padding: "28px" }}
+              style={{ padding: "28px", background: "linear-gradient(135deg, rgba(139, 92, 246, 0.07) 0%, #08080a 55%)" }}
             >
               <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "14px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -621,7 +676,7 @@ export default function Home() {
               variants={inView}
               transition={inViewTransition(0.16)}
               whileHover={{ y: -5, transition: { type: "spring", stiffness: 320, damping: 22 } }}
-              style={{ padding: "28px 36px" }}
+              style={{ padding: "28px 36px", background: "linear-gradient(135deg, rgba(0, 150, 199, 0.03) 0%, #08080a 60%)" }}
             >
               <div style={{ display: "flex", alignItems: "flex-start", gap: "36px", height: "100%", flexWrap: "wrap" }}>
                 <div style={{ minWidth: "140px" }}>
@@ -696,6 +751,10 @@ export default function Home() {
               lineHeight: "1.08",
               marginBottom: "44px",
               letterSpacing: "-0.055em",
+              background: "linear-gradient(175deg, #ffffff 40%, rgba(255,255,255,0.72) 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
               color: "#ffffff"
             }}
           >
@@ -709,15 +768,19 @@ export default function Home() {
             variants={inView}
             transition={inViewTransition(0.2)}
             style={{
+              position: "relative",
               fontSize: "clamp(1.1rem, 2.5vw, 1.45rem)",
-              color: "rgba(255,255,255,0.7)",
+              color: "rgba(255,255,255,0.72)",
               lineHeight: "1.75",
               marginBottom: "40px",
               fontWeight: 300,
               fontFamily: "var(--font-serif)",
               fontStyle: "italic",
-              maxWidth: "660px",
-              margin: "0 auto 40px"
+              maxWidth: "620px",
+              margin: "0 auto 40px",
+              borderLeft: "2px solid rgba(0, 150, 199, 0.35)",
+              paddingLeft: "28px",
+              textAlign: "left"
             }}
           >
             "For centuries, software executed instructions.
