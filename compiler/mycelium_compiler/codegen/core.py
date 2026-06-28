@@ -252,7 +252,7 @@ def ensure_stellar_cli() -> str:
     version = "27.0.0"
 
     if "windows" in system and ("86" in machine or "amd64" in machine):
-        filename = f"stellar-cli-{version}-x86_64-pc-windows-msvc.zip"
+        filename = f"stellar-cli-{version}-x86_64-pc-windows-msvc.tar.gz"
     elif "linux" in system and "86" in machine:
         filename = f"stellar-cli-{version}-x86_64-unknown-linux-gnu.tar.gz"
     elif "darwin" in system or "mac" in system:

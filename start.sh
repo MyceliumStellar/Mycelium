@@ -11,6 +11,23 @@ cleanup() {
 
 trap cleanup SIGINT SIGTERM
 
+# Detect operating system and determine binary folders & path separators
+VENV_BIN="venv/bin"
+PATH_SEP=":"
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
+    VENV_BIN="venv/Scripts"
+    PATH_SEP=";"
+fi
+
+get_port_pids() {
+    local port=$1
+    if command -v lsof &> /dev/null; then
+        lsof -t -i :$port 2>/dev/null | tr '\n' ' '
+    elif command -v netstat &> /dev/null; then
+        netstat -ano | grep -E "LISTENING|Listening" | grep -E "[:.]$port " | awk '{print $NF}' | sort -u | tr '\n' ' '
+    fi
+}
+
 echo -e "\033[1;36m[System]\033[0m Running environment sanity checks..."
 
 # 1. Check Virtual Environment
@@ -20,11 +37,12 @@ if [ ! -d "venv" ]; then
     exit 1
 fi
 
-if [ ! -f "venv/bin/uvicorn" ]; then
+if [ ! -f "$VENV_BIN/uvicorn" ] && [ ! -f "$VENV_BIN/uvicorn.exe" ]; then
     echo -e "\033[1;31m[Error]\033[0m 'uvicorn' not found in virtual environment."
-    echo -e "Please run: venv/bin/pip install uvicorn fastapi requests cryptography pydantic"
+    echo -e "Please run: $VENV_BIN/pip install uvicorn fastapi requests cryptography pydantic"
     exit 1
 fi
+
 
 # 2. Check node_modules in frontend
 if [ ! -d "ide/frontend/node_modules" ]; then
@@ -58,14 +76,14 @@ if [[ "$(docker images -q mycelium-compiler:latest 2> /dev/null)" == "" ]]; then
 fi
 
 # 4. Check and resolve port binding conflicts
-PORT_8000_PIDS=$(lsof -t -i :8000 2>/dev/null | tr '\n' ' ')
+PORT_8000_PIDS=$(get_port_pids 8000)
 if [ ! -z "$PORT_8000_PIDS" ]; then
     echo -e "\033[1;33m[Warning]\033[0m Port 8000 (Backend) is in use by PID(s): $PORT_8000_PIDS. Terminating conflicting process(es)..."
     kill -9 $PORT_8000_PIDS 2>/dev/null
     sleep 1
 fi
 
-PORT_3000_PIDS=$(lsof -t -i :3000 2>/dev/null | tr '\n' ' ')
+PORT_3000_PIDS=$(get_port_pids 3000)
 if [ ! -z "$PORT_3000_PIDS" ]; then
     echo -e "\033[1;33m[Warning]\033[0m Port 3000 (Frontend) is in use by PID(s): $PORT_3000_PIDS. Terminating conflicting process(es)..."
     kill -9 $PORT_3000_PIDS 2>/dev/null
@@ -83,7 +101,7 @@ echo -e "\033[1;36m[System]\033[0m Launching Mycelium services..."
 # 4. Start FastAPI Backend
 echo -e "\033[1;34m[Backend]\033[0m Starting FastAPI gateway server on http://localhost:8000..."
 cd ide/backend
-PYTHONPATH="../../compiler:../../sdk:../..:$PYTHONPATH" ../../venv/bin/uvicorn main:app --port 8000 --reload &
+PYTHONPATH="../../compiler${PATH_SEP}../../sdk${PATH_SEP}../..${PATH_SEP}$PYTHONPATH" ../../$VENV_BIN/uvicorn main:app --port 8000 --reload &
 BACKEND_PID=$!
 cd ../..
 
