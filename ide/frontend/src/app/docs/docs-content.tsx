@@ -1686,29 +1686,159 @@ agents = hive.discover_agents(prefer_indexer=False)`}
             </P>
 
             <SectionH2 id="memory-model">The Model</SectionH2>
-            <CodeBlock
-              language="bash"
-              filename="architecture"
-              code={`┌─────────────────────────┐
-│  Agent code             │  remember("key", "value")
-│  (off-chain)            │  recall("key") → "value"
-└──────────┬──────────────┘
-           │
-           ▼
-┌─────────────────────────┐
-│  AgentMemory            │  High-level API
-│  (agent_memory.py)      │  anchor() / verify() / rehydrate()
-└──────────┬──────────────┘
-           │
-     ┌─────┴──────┐
-     ▼            ▼
-┌──────────┐  ┌──────────────────┐
-│ Backend  │  │ MemoryAnchorClient│
-│ (file /  │  │ (anchor.py)       │
-│ firestore)│  │ → MemoryAnchor    │
-└──────────┘  │   contract        │
-              └──────────────────┘`}
-            />
+
+            {/* ── Architecture Diagram ── */}
+            <div style={{ marginTop: 16, marginBottom: 24 }}>
+
+              {/* Node 1 — Agent code */}
+              <div style={{
+                borderRadius: 10,
+                border: "1px solid rgba(0, 150, 199, 0.28)",
+                background: "linear-gradient(135deg, rgba(0, 150, 199, 0.08) 0%, #08080a 65%)",
+                padding: "16px 20px",
+                display: "flex", alignItems: "center",
+                justifyContent: "space-between", gap: 16, flexWrap: "wrap",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                    background: "rgba(0, 150, 199, 0.12)",
+                    border: "1px solid rgba(0, 150, 199, 0.22)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <Code size={15} color="var(--accent-cyan)" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "#fff" }}>Agent code</div>
+                    <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.38)", fontFamily: "var(--font-mono)", marginTop: 2 }}>off-chain</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
+                  {[`remember("key", "value")`, `recall("key") → "value"`].map(s => (
+                    <code key={s} style={{
+                      fontSize: "0.72rem", fontFamily: "var(--font-mono)",
+                      color: "var(--accent-cyan)",
+                      background: "rgba(0,150,199,0.1)", border: "1px solid rgba(0,150,199,0.18)",
+                      padding: "3px 10px", borderRadius: 4, whiteSpace: "nowrap",
+                    }}>{s}</code>
+                  ))}
+                </div>
+              </div>
+
+              {/* Arrow 1 */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", height: 30 }}>
+                <div style={{ width: 1, flex: 1, background: "rgba(255,255,255,0.09)" }} />
+                <div style={{ width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderTop: "7px solid rgba(255,255,255,0.13)" }} />
+              </div>
+
+              {/* Node 2 — AgentMemory */}
+              <div style={{
+                borderRadius: 10,
+                border: "1px solid rgba(139, 92, 246, 0.28)",
+                background: "linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, #08080a 65%)",
+                padding: "16px 20px",
+                display: "flex", alignItems: "center",
+                justifyContent: "space-between", gap: 16, flexWrap: "wrap",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                    background: "rgba(139, 92, 246, 0.12)",
+                    border: "1px solid rgba(139, 92, 246, 0.22)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <Database size={15} color="var(--accent-purple)" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "#fff" }}>AgentMemory</div>
+                    <div style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.38)", fontFamily: "var(--font-mono)", marginTop: 2 }}>agent_memory.py · High-level API</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  {["anchor()", "verify()", "rehydrate()"].map(m => (
+                    <code key={m} style={{
+                      fontSize: "0.72rem", fontFamily: "var(--font-mono)",
+                      color: "var(--accent-purple)",
+                      background: "rgba(139, 92, 246, 0.1)", border: "1px solid rgba(139, 92, 246, 0.18)",
+                      padding: "3px 9px", borderRadius: 4,
+                    }}>{m}</code>
+                  ))}
+                </div>
+              </div>
+
+              {/* Fork connector */}
+              <div style={{ position: "relative", height: 36 }}>
+                {/* vertical stem */}
+                <div style={{ position: "absolute", left: "50%", top: 0, width: 1, height: "50%", background: "rgba(255,255,255,0.09)", transform: "translateX(-50%)" }} />
+                {/* horizontal bar */}
+                <div style={{ position: "absolute", left: "25%", right: "25%", top: "50%", height: 1, background: "rgba(255,255,255,0.09)" }} />
+                {/* left arm */}
+                <div style={{ position: "absolute", left: "25%", top: "50%", width: 1, height: "50%", background: "rgba(255,255,255,0.09)", transform: "translateX(-50%)" }} />
+                {/* right arm */}
+                <div style={{ position: "absolute", left: "75%", top: "50%", width: 1, height: "50%", background: "rgba(255,255,255,0.09)", transform: "translateX(-50%)" }} />
+                {/* left arrowhead */}
+                <div style={{ position: "absolute", left: "25%", bottom: 0, transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "4px solid transparent", borderRight: "4px solid transparent", borderTop: "6px solid rgba(255,255,255,0.13)" }} />
+                {/* right arrowhead */}
+                <div style={{ position: "absolute", left: "75%", bottom: 0, transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "4px solid transparent", borderRight: "4px solid transparent", borderTop: "6px solid rgba(255,255,255,0.13)" }} />
+              </div>
+
+              {/* Bottom row */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+
+                {/* Node 3 — Backend */}
+                <div style={{
+                  borderRadius: 10,
+                  border: "1px solid rgba(15, 159, 120, 0.22)",
+                  background: "linear-gradient(135deg, rgba(15, 159, 120, 0.07) 0%, #08080a 65%)",
+                  padding: "16px 18px",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+                      background: "rgba(15, 159, 120, 0.12)",
+                      border: "1px solid rgba(15, 159, 120, 0.22)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <Layers size={13} color="var(--accent-green)" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#fff" }}>Backend</div>
+                      <div style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.35)", fontFamily: "var(--font-mono)", marginTop: 1 }}>file / firestore</div>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: "0.76rem", color: "rgba(255,255,255,0.42)", lineHeight: 1.55, margin: 0 }}>
+                    Off-chain key-value store. Holds the actual memory data.
+                  </p>
+                </div>
+
+                {/* Node 4 — MemoryAnchorClient */}
+                <div style={{
+                  borderRadius: 10,
+                  border: "1px solid rgba(255, 204, 0, 0.18)",
+                  background: "linear-gradient(135deg, rgba(255, 204, 0, 0.05) 0%, #08080a 65%)",
+                  padding: "16px 18px",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+                      background: "rgba(255, 204, 0, 0.1)",
+                      border: "1px solid rgba(255, 204, 0, 0.2)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <Shield size={13} color="var(--accent-yellow)" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#fff" }}>MemoryAnchorClient</div>
+                      <div style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.35)", fontFamily: "var(--font-mono)", marginTop: 1 }}>anchor.py</div>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: "0.76rem", color: "rgba(255,255,255,0.42)", lineHeight: 1.55, margin: 0 }}>
+                    On-chain <code style={{ fontFamily: "var(--font-mono)", fontSize: "0.8em", background: "rgba(255,255,255,0.07)", padding: "1px 4px", borderRadius: 3, color: "rgba(255,255,255,0.7)" }}>MemoryAnchor</code> contract. Stores the SHA-256 root hash.
+                  </p>
+                </div>
+
+              </div>
+            </div>
             <P>
               The key insight: the anchor contract stores <strong>O(1) data per agent</strong> regardless of how much memory the agent has. Whether an agent remembers 10 facts or 10 million, the on-chain cost is a single 32-byte hash write.
             </P>
