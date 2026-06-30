@@ -4,8 +4,13 @@ x402 — machine-to-machine commerce primitives (conditional escrow + settlement
 Both halves are real on-chain operations routed through `AgentContext`:
   - `create_locked_escrow` deploys an instance of the bundled escrow contract
     (`mycelium_sdk/contracts/escrow.wasm`, compiled from `escrow_contract.py`)
-    and locks the payment by invoking `initialize`.
-  - `release_funds` invokes `claim_funds(proof)` on an existing escrow.
+    and locks the payment by invoking `initialize`, naming a `judge` as the
+    release authority.
+  - `release_funds` / `split_release` invoke `claim_funds` / `claim_and_split`
+    on an existing escrow. These must be signed by the escrow's `judge` (the
+    verdict authority), not the depositor — release follows a judge's verdict on
+    the worker's evidence, not a SHA-256 preimage. `evidence_root` ties the
+    payout to the approved submission and is recorded on-chain for audit.
 
 No mocks: deployment uses the same pure-Python signed-transaction flow as
 `mycelium deploy` (`AgentContext.deploy_contract`), and the lock/claim are
@@ -14,6 +19,8 @@ signed Soroban transactions.
 
 import os
 from decimal import Decimal
+
+from mycelium_sdk.scval import u64
 
 # 1 XLM = 10,000,000 stroops; Soroban token amounts are integer stroops (i128).
 STROOPS_PER_XLM = 10_000_000
@@ -35,13 +42,15 @@ class EscrowPaymentRouter:
         self,
         provider_id: str,
         amount_xlm: Decimal,
-        task_hash: bytes,
+        judge: str,
         token: str | None = None,
         timeout_seconds: int = DEFAULT_ESCROW_TIMEOUT_SECONDS,
     ) -> str:
         """
         Deploy an escrow instance and lock `amount_xlm` payable to `provider_id`,
-        releasable once a proof of `task_hash` is published (`release_funds`).
+        releasable when `judge` authorizes it on a passing verdict
+        (`release_funds` / `split_release`). The depositor may refund after
+        `timeout_seconds` if no release happens.
 
         Returns the deployed escrow contract address. `token` defaults to the
         network's native-XLM Stellar Asset Contract.
@@ -50,7 +59,7 @@ class EscrowPaymentRouter:
             raise FileNotFoundError(
                 f"Bundled escrow WASM missing at {_ESCROW_WASM}. Reinstall "
                 "mycelium-sdk, or rebuild it with "
-                "`mycelium compile escrow_contract.py -o "
+                "`mycelium compile contracts/escrow_contract.py -o "
                 "mycelium_sdk/contracts/escrow.wasm`."
             )
 
@@ -74,43 +83,48 @@ class EscrowPaymentRouter:
         if timeout_seconds <= 0:
             raise ValueError(f"Escrow timeout must be positive (got {timeout_seconds}s).")
 
+        if not judge:
+            raise ValueError("create_locked_escrow requires a judge address (the release authority).")
+
         token = token or native_token_address(self.context.network_type)
         depositor = self.context.keypair.public_key
 
         print(
             f"[x402] Deploying escrow + locking {amount_xlm} XLM for "
-            f"provider {provider_id}..."
+            f"provider {provider_id} (judge {judge[:6]}…)..."
         )
         escrow_id = self._deploy_escrow_instance()
 
-        # Lock the funds: initialize(depositor, provider, token, amount, hash, timeout).
+        # Lock the funds: initialize(depositor, provider, token, amount, judge, timeout).
         self.context.call_contract(
             contract_id=escrow_id,
             function_name="initialize",
-            args=[depositor, provider_id, token, amount_stroops, task_hash, timeout_seconds],
+            args=[depositor, provider_id, token, amount_stroops, judge, u64(timeout_seconds)],
         )
         print(f"[x402] Escrow live at {escrow_id} (funds locked).")
         return escrow_id
 
-    def release_funds(self, escrow_contract_id: str, verification_proof: bytes):
+    def release_funds(self, escrow_contract_id: str, evidence_root: bytes):
         """
-        Disburse locked funds by invoking `claim_funds(proof)` on the escrow
-        contract. The proof must SHA-256 to the task hash. Returns the TxResult.
+        Disburse locked funds by invoking `claim_funds(evidence_root)` on the
+        escrow. Must be signed by the escrow's judge (the verdict authority);
+        `evidence_root` ties the payout to the approved submission. Returns the
+        TxResult.
         """
-        print("[x402] Confirming task execution. Triggering disbursement of funds...")
+        print("[x402] Verdict passed. Releasing locked funds to provider...")
         return self.context.call_contract(
             contract_id=escrow_contract_id,
             function_name="claim_funds",
-            args=[verification_proof],
+            args=[evidence_root],
         )
 
-    def split_release(self, escrow_contract_id: str, shares, verification_proof: bytes):
+    def split_release(self, escrow_contract_id: str, shares, evidence_root: bytes):
         """
         Release locked escrow funds across N recipients (a swarm), splitting the
         locked amount by `shares`. `shares` is a list of `(recipient_address,
         share_bps)` whose basis points must sum to 10000. Invokes
-        `claim_and_split(proof, recipients, amounts)` on the escrow — the `proof`
-        must SHA-256 to the task hash. Returns the TxResult.
+        `claim_and_split(evidence_root, recipients, amounts)` on the escrow — must
+        be signed by the escrow's judge. Returns the TxResult.
 
         The exact stroop amounts are computed here so they sum to the locked
         amount with no rounding dust (the remainder lands on the last recipient);
@@ -159,7 +173,7 @@ class EscrowPaymentRouter:
         return self.context.call_contract(
             contract_id=escrow_contract_id,
             function_name="claim_and_split",
-            args=[verification_proof, recipients, amounts],
+            args=[evidence_root, recipients, amounts],
         )
 
     def refund(self, escrow_contract_id: str):
@@ -184,18 +198,16 @@ class EscrowPaymentRouter:
 
 # ── Back-compat aliases (previous class/method names) ────────────────────────
 class EscrowPaymentManager(EscrowPaymentRouter):
-    """Deprecated alias for EscrowPaymentRouter."""
+    """
+    Deprecated alias for EscrowPaymentRouter. The escrow no longer releases on a
+    SHA-256 preimage — it releases on a `judge`'s verdict — so a `judge` address
+    is now required where a `task_id` once stood.
+    """
 
-    def create_escrow_payment(self, recipient_id: str, amount_xlm: float, task_id: str) -> str:
-        # The escrow locks against a SHA-256 task_hash and releases on a preimage
-        # proof, so hash the task id here; disburse_payment passes the raw id back
-        # as the proof (sha256(proof) == task_hash).
-        import hashlib
+    def create_escrow_payment(self, recipient_id: str, amount_xlm: float, judge: str) -> str:
+        return self.create_locked_escrow(recipient_id, Decimal(str(amount_xlm)), judge)
 
-        task_hash = hashlib.sha256(task_id.encode("utf-8")).digest()
-        return self.create_locked_escrow(recipient_id, Decimal(str(amount_xlm)), task_hash)
-
-    def disburse_payment(self, escrow_id: str, signature_proof) -> bool:
-        proof = signature_proof.encode("utf-8") if isinstance(signature_proof, str) else signature_proof
-        self.release_funds(escrow_id, proof)
+    def disburse_payment(self, escrow_id: str, evidence_root) -> bool:
+        root = evidence_root.encode("utf-8") if isinstance(evidence_root, str) else evidence_root
+        self.release_funds(escrow_id, root)
         return True

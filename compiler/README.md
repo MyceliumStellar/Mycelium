@@ -2,6 +2,14 @@
 
 The Mycelium Compiler (`mycelium-compiler`) is a high-performance Python AST parser and transpilation engine that converts Python-DSL smart contracts into highly optimized, secure WebAssembly (WASM) binaries for the Stellar/Soroban virtual machine.
 
+> **v0.4.0** — the compiler rejoins the unified version line (`0.2.0` → `0.4.0`),
+> matching `mycelium-sdk`, `mycelium-cli`, and the `mycelium-stellar` metapackage.
+
+> **Note for contract authors:** per-address storage keys use the raw `Address` —
+> write `storage.set("stake:" + addr, value)`. The compiler maps `"prefix:" + addr`
+> to a `(Symbol, Address)` tuple key automatically; do **not** wrap the address in
+> `str()`.
+
 ---
 
 ## 🏗️ Compiler Architecture

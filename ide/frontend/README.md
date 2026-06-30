@@ -1,3 +1,18 @@
+# Mycelium Web IDE — Frontend (v0.4.0)
+
+The Mycelium Web IDE: a Python-first contract editor, agent-creation wizard, and
+the **on-chain Bounty Board**. As of v0.4.0 the bounty board renders
+**self-describing proof-layer jobs** — each card shows the real on-chain `title`,
+`description`, acceptance `checks`, the poster's chosen judge panel, and the
+verdict `score` (read from the indexer's `/jobs`, which now serves those fields, or
+directly from the JobBoard contract). See [`docs/proof.md`](../../docs/proof.md)
+for the verifiable-work model and [`docs/ide.md`](../../docs/ide.md) for the IDE
+architecture.
+
+> Heads up: this app pins a customized Next.js — read `AGENTS.md` before editing.
+
+---
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

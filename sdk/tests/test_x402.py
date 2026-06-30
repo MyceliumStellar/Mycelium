@@ -34,17 +34,17 @@ def test_create_locked_escrow_locks_funds(monkeypatch):
     # Avoid a real on-chain deploy; just return a fake escrow id.
     monkeypatch.setattr(router, "_deploy_escrow_instance", lambda: "CESCROWID")
 
-    escrow_id = router.create_locked_escrow("CPROVIDER", Decimal("1.5"), b"taskhash")
+    escrow_id = router.create_locked_escrow("CPROVIDER", Decimal("1.5"), "GJUDGE")
     assert escrow_id == "CESCROWID"
 
     call = ctx.calls[0]
     assert call["contract_id"] == "CESCROWID"
     assert call["function_name"] == "initialize"
-    depositor, provider, token, amount, task_hash, timeout = call["args"]
+    depositor, provider, token, amount, judge, timeout = call["args"]
     assert depositor == ctx.keypair.public_key
     assert provider == "CPROVIDER"
     assert amount == 15_000_000          # 1.5 XLM in stroops
-    assert task_hash == b"taskhash"
+    assert judge == "GJUDGE"             # the release authority, not a task hash
     # Default token is the network's native SAC.
     from mycelium_sdk.constants import native_token_address
     assert token == native_token_address("testnet")
@@ -69,9 +69,10 @@ def test_deploy_escrow_instance_uses_pure_python_deploy(monkeypatch):
 
 def test_release_funds_calls_claim():
     ctx = _FakeContext()
-    EscrowPaymentRouter(ctx).release_funds("CESCROW", b"proof")
+    root = b"\x01" * 32
+    EscrowPaymentRouter(ctx).release_funds("CESCROW", root)
     assert ctx.calls[0]["function_name"] == "claim_funds"
-    assert ctx.calls[0]["args"] == [b"proof"]
+    assert ctx.calls[0]["args"] == [root]
 
 
 def test_split_release_computes_exact_amounts():
@@ -82,15 +83,16 @@ def test_split_release_computes_exact_amounts():
     ctx.read_returns = {"get_details": {"amount": 1_000_003}}
 
     router = EscrowPaymentRouter(ctx)
+    root = b"\x02" * 32
     router.split_release(
         "CESCROW",
         [("CPROV1", 3333), ("CPROV2", 3333), ("CPROV3", 3334)],
-        b"proof",
+        root,
     )
 
     split = [c for c in ctx.calls if c["function_name"] == "claim_and_split"][0]
-    proof, recipients, amounts = split["args"]
-    assert proof == b"proof"
+    evidence_root, recipients, amounts = split["args"]
+    assert evidence_root == root
     assert recipients == ["CPROV1", "CPROV2", "CPROV3"]
     # amounts sum exactly to the locked amount, no dust lost
     assert sum(amounts) == 1_000_003
@@ -111,7 +113,7 @@ def test_create_locked_escrow_rejects_non_positive_amount(monkeypatch, bad_amoun
     router = EscrowPaymentRouter(ctx)
     monkeypatch.setattr(router, "_deploy_escrow_instance", lambda: "CESCROWID")
     with pytest.raises(ValueError):
-        router.create_locked_escrow("CPROVIDER", Decimal(bad_amount), b"taskhash")
+        router.create_locked_escrow("CPROVIDER", Decimal(bad_amount), "GJUDGE")
     assert ctx.calls == []  # nothing deployed or locked
 
 
@@ -121,7 +123,7 @@ def test_create_locked_escrow_rejects_above_i128_ceiling(monkeypatch):
     monkeypatch.setattr(router, "_deploy_escrow_instance", lambda: "CESCROWID")
     huge = Decimal(settlement.I128_MAX)  # already in XLM → ×1e7 blows past i128
     with pytest.raises(ValueError):
-        router.create_locked_escrow("CPROVIDER", huge, b"taskhash")
+        router.create_locked_escrow("CPROVIDER", huge, "GJUDGE")
     assert ctx.calls == []
 
 
@@ -130,7 +132,7 @@ def test_create_locked_escrow_rejects_substroop_amount(monkeypatch):
     router = EscrowPaymentRouter(ctx)
     monkeypatch.setattr(router, "_deploy_escrow_instance", lambda: "CESCROWID")
     with pytest.raises(ValueError):
-        router.create_locked_escrow("CPROVIDER", Decimal("0.00000001"), b"taskhash")  # < 1 stroop
+        router.create_locked_escrow("CPROVIDER", Decimal("0.00000001"), "GJUDGE")  # < 1 stroop
 
 
 def test_split_release_rejects_non_positive_bps():

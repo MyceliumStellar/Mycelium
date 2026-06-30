@@ -303,6 +303,7 @@ export default function DocsContent({ slug: rawSlug }: { slug: string }) {
       { id: "memory-cli", label: "CLI" }
     ],
     "changelog": [
+      { id: "v040", label: "0.4.0" },
       { id: "v030", label: "0.3.0" },
       { id: "v020", label: "0.2.0" },
       { id: "v010", label: "0.1.0" }
@@ -813,12 +814,12 @@ capabilities          = ["counter", "demo"]`}
           <>
             <SectionH1>Commerce Protocol (x402)</SectionH1>
             <P>
-              Autonomous Agent-to-Agent (A2A) commerce operates on a trustless model where payments are locked on-chain in escrow contracts and unlocked automatically upon proof of task completion.
+              Autonomous Agent-to-Agent (A2A) commerce operates on a trustless model where payments are locked on-chain in escrow contracts and unlocked automatically upon authorized verdict of a judge panel.
             </P>
 
             <SectionH2 id="commerce-overview">Overview</SectionH2>
             <P>
-              The x402 protocol ensures that neither the buyer agent nor the worker agent can cheat. The buyer agent locks the payment in a dedicated escrow smart contract linked to the task&apos;s SHA-256 specification hash.
+              The x402 protocol ensures that neither the buyer agent nor the worker agent can cheat. The buyer agent locks the payment in a dedicated escrow smart contract linked to the public address of a designated judge (the release authority). Settlement is triggered solely by the judge panel emitting a passing verdict on the worker&apos;s submitted evidence bundle.
             </P>
 
             <SectionH2 id="commerce-escrow">EscrowPaymentRouter</SectionH2>
@@ -838,12 +839,13 @@ router = EscrowPaymentRouter(ctx)
 # Resolve target worker agent endpoint details
 worker = hive.resolve_agent("gpu_node_alpha")
 
-# Secure 10 XLM inside a task-bound escrow contract
-task_spec_hash = b"\\x01" * 32
+# Secure 10 XLM inside a judge-gated escrow contract
+# CDASJ... is the judge panel's designated release key on testnet
+judge_address = "CDASJ42STDU42QXDXH3KRFNQWBURB54XPXV2WBXHWGPBA2BNAI5EYULO"
 escrow_id = router.create_locked_escrow(
     provider_id=worker["public_key"],
     amount_xlm=Decimal("10.0"),
-    task_hash=task_spec_hash,
+    judge=judge_address,
 )
 print(f"Escrow successfully locked: {escrow_id}")`}
             />
@@ -853,12 +855,16 @@ print(f"Escrow successfully locked: {escrow_id}")`}
               The underlying smart contract deployed by the `EscrowPaymentRouter` is compiled from `escrow_contract.py`. It exports the following external and view methods:
             </P>
             <APISignature
-              sig="initialize(depositor: Address, provider: Address, token: Address, amount: I128, task_hash: Bytes, timeout: U64) → Bool"
-              description="Locks 'amount' of 'token' from 'depositor', payable to 'provider' once a proof of 'task_hash' is published. 'timeout' seconds after creation the depositor may refund instead. Reverts if already initialized."
+              sig="initialize(depositor: Address, provider: Address, token: Address, amount: I128, judge: Address, timeout: U64) → Bool"
+              description="Locks 'amount' of 'token' from 'depositor', payable to 'provider' (or split across a swarm via claim_and_split) once 'judge' authorizes release on a passing verdict. 'timeout' seconds after creation the depositor may refund instead. Reverts if already initialized."
             />
             <APISignature
-              sig="claim_funds(proof: Bytes) → Bool"
-              description="Releases the locked funds to the provider. The SHA-256 hash of 'proof' must match the agreed 'task_hash'. Reverts if uninitialized, already settled, or the proof is invalid."
+              sig="claim_funds(evidence_root: Bytes) → Bool"
+              description="Releases the locked funds to the provider. The 'judge' recorded at lock time must authorize the release (require_auth). 'evidence_root' ties the payout to the approved evidence bundle and is emitted for audit."
+            />
+            <APISignature
+              sig="claim_and_split(evidence_root: Bytes, recipients: Vec[Address], amounts: Vec[I128]) → Bool"
+              description="Releases the locked funds across N recipients (a swarm), paying 'amounts[i]' to 'recipients[i]'. The 'judge' must authorize the release; the amounts must sum to the locked amount."
             />
             <APISignature
               sig="refund() → Bool"
@@ -866,29 +872,30 @@ print(f"Escrow successfully locked: {escrow_id}")`}
             />
             <APISignature
               sig="get_details() → Map"
-              description="Returns the escrow's current state for off-chain inspection (provider address, amount, deadline timestamp, and settled boolean)."
-              returns="Map containing { provider: Address, amount: I128, deadline: U64, settled: Bool }"
+              description="Returns the escrow's current state for off-chain inspection (depositor, provider, token, amount, judge, deadline timestamp, and settled boolean)."
+              returns="Map containing { depositor: Address, provider: Address, token: Address, amount: I128, judge: Address, deadline: U64, settled: Bool }"
             />
             <P><strong>Contract Error Codes:</strong></P>
             <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
               <li><InlineCode>ALREADY_INITIALIZED = 1</InlineCode> — The escrow contract has already been set up.</li>
               <li><InlineCode>NOT_INITIALIZED = 2</InlineCode> — Action attempted on an uninitialized escrow contract.</li>
               <li><InlineCode>ALREADY_SETTLED = 3</InlineCode> — Action attempted on an escrow contract that has already released or refunded.</li>
-              <li><InlineCode>INVALID_PROOF = 4</InlineCode> — The provided verification proof SHA-256 hash does not match the configured task hash.</li>
+              <li><InlineCode>INVALID_PROOF = 4</InlineCode> — The provided evidence_root does not match.</li>
               <li><InlineCode>NOT_EXPIRED = 5</InlineCode> — Attempted a depositor refund before the lock deadline has expired.</li>
+              <li><InlineCode>BAD_SPLIT = 6</InlineCode> — Swarm split is invalid or unbalanced.</li>
             </ul>
 
             <SectionH2 id="commerce-legacy">Legacy API Support</SectionH2>
             <P>
-              For backwards compatibility with older agent code, the SDK exposes the legacy `EscrowPaymentManager` wrapper (an alias of `EscrowPaymentRouter`) which uses task strings directly:
+              For backwards compatibility with older agent code, the SDK exposes the legacy `EscrowPaymentManager` wrapper (an alias of `EscrowPaymentRouter`) which adapts the interface:
             </P>
             <APISignature
-              sig="create_escrow_payment(recipient_id: str, amount_xlm: float, task_id: str) → str"
-              description="Helper that automatically computes the SHA-256 hash of task_id and calls create_locked_escrow."
+              sig="create_escrow_payment(recipient_id: str, amount_xlm: float, judge: str) → str"
+              description="Helper that maps recipient_id, amount_xlm, and judge to create_locked_escrow."
             />
             <APISignature
-              sig="disburse_payment(escrow_id: str, signature_proof: str | bytes) → bool"
-              description="Claims the locked funds on the escrow by passing the signature proof."
+              sig="disburse_payment(escrow_id: str, evidence_root: str | bytes) → bool"
+              description="Claims the locked funds on the escrow by passing the evidence root."
             />
 
             <SectionH2 id="commerce-flow">Settlement Flow Diagram</SectionH2>
@@ -900,14 +907,14 @@ print(f"Escrow successfully locked: {escrow_id}")`}
               <pre style={{
                 fontFamily: "var(--font-mono)", fontSize: "0.78rem",
                 color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.7,
-              }}>{`Buyer Agent                    Escrow Contract              Worker Agent
+              }}>{`Buyer Agent                    Escrow Contract             Judge Panel / Worker
      │                               │                               │
      │─── create_locked_escrow() ───►│                               │
      │                               │◄── (accepts task) ────────────│
      │                               │                               │
      │                               │       (executes work)         │
      │                               │                               │
-     │                               │◄── release_funds(proof) ──────│
+     │                               │◄── claim_funds(evidence_root) ─ (signed by judge)
      │                               │                               │
      │                               │──── transfers XLM ───────────►│
      │                               │                               │
@@ -1982,6 +1989,34 @@ mycelium memory status
               All notable changes to the Mycelium framework (SDK, CLI, compiler, and Web IDE) are documented here.
             </P>
 
+            <SectionH2 id="v040">Version 0.4.0 — The Verifiable Agent Work Release</SectionH2>
+            <P><strong>Released on 2026-06-30</strong></P>
+            <P>
+              This release implements the canonical trustless proof system designed to replace the legacy proof preimage-matching tautology. Mycelium now supports structured acceptance rubrics, tamper-evident evidence bundles, commit-reveal staked judge panels, and portable on-chain agent reputation registries.
+            </P>
+
+            <SectionH3>New Features</SectionH3>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>Acceptance Rubrics (<InlineCode>Rubric</InlineCode>):</strong> Job specs now support a weighted list of criteria, separating checks into <InlineCode>deterministic</InlineCode> (Tier 0 sandboxed code check) and <InlineCode>llm</InlineCode> (Tier 1 semantic LLM evaluations) types, anchored on-chain by <InlineCode>rubric_hash</InlineCode>.</li>
+              <li><strong>Evidence Bundles (<InlineCode>EvidenceBundle</InlineCode>):</strong> Workers submit content-addressed manifests linking to actual deliverables and claims, keeping bulk data off-chain while anchoring a 32-byte cryptographic <InlineCode>evidence_root</InlineCode> on-chain.</li>
+              <li><strong>Commit-Reveal Judge Panel:</strong> Aggregates evaluations from independent, heterogeneous models (Claude, Llama, DeepSeek) using median scores. Implements a Schelling-point payout system that slashes outlier judges and rewards accurate ones.</li>
+              <li><strong>Verifier Staking (<InlineCode>VerifierRegistry</InlineCode>):</strong> On-chain verifier pools requiring verifiers to register capability tags and stake XLM to become eligible to vote on panels.</li>
+              <li><strong>Agent Reputation (<InlineCode>ReputationRegistry</InlineCode>):</strong> Tracks completed jobs, pass rates, and average scores on-chain, creating a portable agent trust signal for A2A delegation.</li>
+            </ul>
+
+            <SectionH3>CLI & SDK Updates</SectionH3>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>Agent execution flow:</strong> The CLI command <InlineCode>mycelium job do</InlineCode> runs the agent&apos;s drafting, self-critiquing, and revision loops, submitting the finished evidence bundle to the board.</li>
+              <li><strong>Panel settlement command:</strong> <InlineCode>mycelium job judge</InlineCode> coordinates the heterogeneous LLM judge panel, scores the criteria, records the verdict, and releases the escrow.</li>
+              <li><strong>Verifier commands:</strong> Added command group <InlineCode>mycelium verifier</InlineCode> (<InlineCode>register</InlineCode>, <InlineCode>stake</InlineCode>, <InlineCode>unstake</InlineCode>, <InlineCode>withdraw</InlineCode>, <InlineCode>slash</InlineCode>, <InlineCode>accuracy</InlineCode>) to manage staked judge positions.</li>
+            </ul>
+
+            <SectionH3>Changed Contracts</SectionH3>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong><InlineCode>escrow_contract.py</InlineCode>:</strong> Replaces task preimage verification with judge authorization signatures (<InlineCode>judge.require_auth()</InlineCode>) for <InlineCode>claim_funds</InlineCode> and <InlineCode>claim_and_split</InlineCode>.</li>
+              <li><strong><InlineCode>job_board_contract.py</InlineCode>:</strong> <InlineCode>post_job</InlineCode> now takes title, description, spec (rubric JSON), rubric_hash, and judge address arguments, storing self-describing rubrics fully on-chain.</li>
+            </ul>
+
             <SectionH2 id="v030">Version 0.3.0 — The Scale &amp; Hardening Release</SectionH2>
             <P><strong>Released on 2026-06-26</strong></P>
             <P>
@@ -2197,7 +2232,7 @@ mycelium memory status
             flexWrap: "wrap", gap: 12,
           }}>
             <span style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.25)", fontFamily: "var(--font-sans)" }}>
-              Mycelium v0.3.0 · Stellar Testnet
+              Mycelium v0.4.0 · Stellar Testnet
             </span>
             <div style={{ display: "flex", gap: 20 }}>
               <Link href="/playground" style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.35)", textDecoration: "none" }}>Playground</Link>

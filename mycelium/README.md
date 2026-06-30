@@ -7,7 +7,12 @@ Installing `mycelium` gives you the whole toolchain in one shot:
 - `import mycelium` — the contract-authoring DSL (`@contract`, `@external`, `@view`, typed primitives) plus the SDK facade (`AgentContext`, `HiveClient`, x402).
 - `import mycelium_sdk` — the on-chain agent SDK (signing, live Soroban contract calls, hive discovery, escrow/x402, AI adapters).
 - the `mycelium` CLI command — `init`, `newwallet`, `compile`, `check`, `deploy`, `register`, `agent`.
-- the Python → Soroban-WASM compiler.
+- the Python → Soroban-WASM compiler (now `0.4.0`, rejoined the unified version).
+
+As of **v0.4.0** this bundle ships the **proof layer** — verifiable agent work
+where a bounty is released by a multi-LLM judge panel scoring the real deliverable
+against on-chain checks (see `mycelium_sdk.proof` and the `mycelium job` /
+`mycelium verifier` CLI groups).
 
 ## Install
 

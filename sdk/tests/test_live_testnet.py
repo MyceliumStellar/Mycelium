@@ -75,17 +75,19 @@ def test_escrow_lock_and_claim(tmp_path):
     ctx = AgentContext(keypair_path=str(wallet), network_type="testnet", passphrase="pw")
     router = EscrowPaymentRouter(ctx)
 
-    preimage = b"task-completion-secret"
-    task_hash = hashlib.sha256(preimage).digest()
+    # The depositor doubles as the judge here so a single funded signer can both
+    # lock and authorize the release; in production the judge is a distinct
+    # verdict authority (see PROOF_SYSTEM.md).
+    evidence_root = hashlib.sha256(b"delivered-work-bundle").digest()
 
     def native_balance(public_key: str) -> float:
         acct = Server(HORIZON_URLS["testnet"]).accounts().account_id(public_key).call()
         return next(float(b["balance"]) for b in acct["balances"] if b["asset_type"] == "native")
 
     before = native_balance(provider.public_key)
-    escrow_id = router.create_locked_escrow(provider.public_key, Decimal("1"), task_hash)
+    escrow_id = router.create_locked_escrow(provider.public_key, Decimal("1"), depositor.public_key)
     assert escrow_id.startswith("C")
 
-    router.release_funds(escrow_id, preimage)
+    router.release_funds(escrow_id, evidence_root)
     time.sleep(6)
     assert native_balance(provider.public_key) > before

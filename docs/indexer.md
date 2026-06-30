@@ -171,7 +171,11 @@ When a new agent name is first seen, the worker calls `resolve_agent(name)` on
 the chain to fetch immutable metadata (endpoint, model, role, description,
 reputation, capability_tags) and caches the result for the process lifetime.
 Similarly, `resolve_job(job_id)` enriches a newly posted job with token, mode,
-escrow, and deadline fields that the event doesn't carry.
+escrow, and deadline fields that the event doesn't carry. As of v0.4.0 the job is
+**self-describing on-chain**, so enrichment also copies the job's `title`,
+`description`, and `spec` (its acceptance checks + chosen judge panel), plus
+`judge` and `rubric_hash` — letting the bounty page render the real job without
+its own chain round-trip.
 
 ### Memory anchor ingestion
 
@@ -260,6 +264,11 @@ uses a descending composite index for sorted/filtered queries.
 | `mode` | `str` (`single`/`swarm`) | Enriched via `resolve_job` |
 | `escrow` | `str` | Enriched via `resolve_job` |
 | `deadline` | `int` | Enriched via `resolve_job` |
+| `judge` | `str` | Enriched via `resolve_job` |
+| `title` | `str` | Enriched via `resolve_job` (on-chain, self-describing job) |
+| `description` | `str` | Enriched via `resolve_job` (on-chain) |
+| `spec` | `str` (JSON) | Enriched via `resolve_job`: acceptance checks + chosen judge panel |
+| `rubric_hash` | `str` | Enriched via `resolve_job` |
 | `posted_ledger` | `int` | `job_posted` event |
 | `last_update_ledger` | `int` | Lifecycle events |
 | `agent` | `str` | `job_claimed` event (the claiming agent) |
@@ -311,9 +320,9 @@ dropped.
 
 ## The read API ([`api.py`](file:///home/ansh/Mycelium/indexer/api.py))
 
-FastAPI app (`indexer.api:app`). Every response envelope carries
-`source_contract` and `as_of_ledger` so a client can verify any row on-chain
-(DB speed, chain trust).
+FastAPI app (`indexer.api:app`), version **0.4.0**. Every response envelope
+carries `source_contract` and `as_of_ledger` so a client can verify any row
+on-chain (DB speed, chain trust).
 
 ### Routes
 

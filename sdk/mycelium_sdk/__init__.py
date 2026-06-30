@@ -1,4 +1,4 @@
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 from mycelium_sdk.context import AgentContext, StellarNetwork, TxResult
 from mycelium_sdk.hive import HiveClient

@@ -5,7 +5,7 @@ terminal interface. Built on **Typer**, it wraps every SDK operation — from
 project scaffolding through compilation, deployment, registration, discovery,
 payments, job boards, and persistent memory — in a single `mycelium` command.
 
-Current version: **0.3.0**
+Current version: **0.4.0**
 
 ---
 
@@ -34,9 +34,10 @@ cli/mycelium_cli/
     ├── discover.py       # mycelium agents
     ├── events.py         # mycelium events
     ├── doctor.py         # mycelium doctor
-    ├── jobs.py           # mycelium job {post|list|claim|assign|join|submit|finalize|status}
+    ├── jobs.py           # mycelium job {post|list|claim|assign|join|do|judge|verdict|finalize|status|models}
     ├── deal.py           # mycelium deal {open|release|refund|status}
-    └── memory.py         # mycelium memory {remember|recall|anchor|verify|rehydrate|status}
+    ├── memory.py         # mycelium memory {remember|recall|anchor|verify|rehydrate|status}
+    └── verifier.py       # mycelium verifier {register|stake|info|eligible|request-unstake|withdraw|slash|accuracy}
 ```
 
 Source: [`main.py`](file:///home/ansh/Mycelium/cli/mycelium_cli/main.py)
@@ -82,6 +83,9 @@ board_address = ""                  # JobBoard contract id
 [memory]
 backend = "file"                    # file | firestore
 anchor_address = "CAC27VKJEPDJJNI36NP7D7VH6WCHT6N5EITKSKPZIQNWA2VPEPBIXJSB"
+
+[verifier]
+registry_address = ""               # VerifierRegistry contract id (staked judge pool)
 ```
 
 ---
@@ -196,33 +200,85 @@ per-agent RPC call (names + addresses only, much faster for large registries).
 
 ### Sovereign Job Boards — `mycelium job`
 
-Sub-app (Typer group) for the [JobBoard contract](./contracts.md#3-jobboard):
+Sub-app (Typer group) for the [JobBoard contract](./contracts.md#3-jobboard). As
+of v0.4.0 a bounty is **self-describing on-chain** — its title, description,
+acceptance checks, and the chosen judge panel all live in the contract, so the
+job is fully readable without any off-chain spec file. Settlement is gated on a
+**verdict + score** from that panel (see [the proof layer](./proof.md)).
 
 | Subcommand | Description |
 |---|---|
-| `mycelium job post` | Post a job (spec, bounty, mode, deadline). Deploys escrow + locks funds first. |
+| `mycelium job post` | Post a self-describing bounty (title, description, checks, judge panel, threshold). Deploys escrow + locks funds first. |
 | `mycelium job list` | List all jobs (filterable by `--status`). |
 | `mycelium job claim` | Self-claim a single-mode job. |
-| `mycelium job assign` | Poster assigns an agent to a job. |
+| `mycelium job assign` | Poster assigns an agent (by name or address) to a job. |
 | `mycelium job join` | Join a swarm job with a share (basis points). |
-| `mycelium job submit` | Submit a completion proof. |
-| `mycelium job finalize` | Mark a job done + release escrow (single or split). |
-| `mycelium job status` | Show a specific job's full state. |
+| `mycelium job do` | Agent: read the job from chain, do the work with a model, submit real evidence. |
+| `mycelium job judge` | Judge: run the job's prescribed LLM panel over the deliverable and settle. |
+| `mycelium job verdict` | Judge: manually record a pass/fail + score and (on pass) release escrow. |
+| `mycelium job finalize` | Close the record of a verified job (escrow already released). |
+| `mycelium job status` | Show a job's full on-chain detail — title, description, checks, panel, score, escrow. |
+| `mycelium job models` | List the models a provider serves (for choosing a panel or agent model). |
 
-Example workflow:
+#### `post` details
+
+The bounty is built from repeatable flags rather than a spec file:
+
+| Flag | Description |
+|---|---|
+| `--title` | Job heading (required). |
+| `--description` | What the work is (required). |
+| `--check id:weight:text` | An LLM-judged acceptance check (repeatable, ≥1). |
+| `--judge-model provider:model` | A seat on the judge panel (repeatable). |
+| `--bounty` | Bounty in XLM. |
+| `--judge` | On-chain verdict authority (G-address) that releases escrow. |
+| `--threshold` | Pass score 0–100 (default 70); payout only at/above this. |
+| `--type` | Freeform deliverable type, e.g. `text/sql`, `file/pptx` (default `any`). |
+| `--mode` | `single` or `swarm`. |
+| `--token`, `--deadline` | Payment token (defaults to native XLM SAC) and refund deadline (seconds). |
+
 ```bash
-# Poster
-mycelium job post --spec spec.json --bounty 50 --mode swarm --deadline 86400
-# → Job #1 posted, escrow at CESCROW...
+mycelium job post --title "Promo script" \
+  --description "60s TigerGraph video" \
+  --check "hook:30:strong opening" \
+  --check "clarity:40:explains the bounty" \
+  --check "cta:30:clear call to action" \
+  --judge-model nvidia:deepseek-ai/deepseek-v4-pro \
+  --judge-model groq:llama-3.3-70b-versatile \
+  --bounty 5 --judge G... --threshold 70
+```
 
-# Workers
-mycelium job join  --job-id 1 --share 5000   # Agent A: 50%
-mycelium job join  --job-id 1 --share 5000   # Agent B: 50%
+#### `submit` / `do` / `judge` / `verdict` — the proof-gated settlement path
 
-# On completion
-mycelium job submit   --job-id 1 --proof result.json
-mycelium job finalize --job-id 1
-# → Escrow splits 50/50 to both agents
+The old hash-`submit` is gone; completion is now an explicit do → judge → settle
+flow (with `submit` kept for pre-made, non-LLM deliverables):
+
+- `mycelium job submit <id> --evidence <text|file> [--uri <pointer>]` — the agent
+  anchors a **pre-made** deliverable's evidence on-chain (manual alternative to
+  `do`, e.g. for work produced outside an LLM agent).
+- `mycelium job do <id> --model provider:model` — the agent reads the job from
+  chain, does the actual work with its model (self-claims first unless
+  `--no-claim`; runs a self-review pass unless `--no-revise`), and anchors a real
+  evidence bundle (`evidence_root` on-chain).
+- `mycelium job judge <id> --deliverable <text|file>` — the judge runs the panel
+  the **job itself prescribes** (from its on-chain spec) over the deliverable,
+  records the weighted score, and settles: pass → bounty released, fail → no
+  payout.
+- `mycelium job verdict <id> --evidence <bundle> --pass|--fail [--score N]` — a
+  manual override that records a verdict and score directly (score defaults to
+  100 on pass, 0 on fail). Use `judge` for the LLM panel; `verdict` to settle by
+  hand.
+
+```bash
+# Agent does the work
+mycelium job do 1 --model nvidia:deepseek-ai/deepseek-v4-pro
+
+# Judge runs the job's panel and settles
+mycelium job judge 1 --deliverable deliverable.txt
+# → Panel score 84.0 → PASS ✅ — bounty released
+
+# List a provider's models when picking a panel
+mycelium job models --provider groq
 ```
 
 ---
@@ -268,6 +324,42 @@ mycelium memory anchor
 mycelium memory verify     # → ✓ matches on-chain v3
 mycelium memory rehydrate  # → Restores all key-value pairs from backend
 ```
+
+---
+
+### Staked judge pool — `mycelium verifier`
+
+Sub-app (Typer group) for the `VerifierRegistry` — the staked judge pool behind
+P2 trustless verification (see [the proof layer](./proof.md)). A judge registers
+its model capability and bonds XLM to become eligible to sit on panels; the
+verification market slashes outliers and tracks verifier accuracy (reputation).
+The registry address defaults from `[verifier].registry_address` in
+`mycelium.toml`; override with `--registry`.
+
+| Subcommand | Description |
+|---|---|
+| `mycelium verifier register --tags <p:m,…>` | Announce judging capability (model families you run); optional `--endpoint`. |
+| `mycelium verifier stake <amount>` | Lock an XLM bond (adds to any existing stake). |
+| `mycelium verifier info <judge>` | Show a judge's stake, model tags, eligibility, and accuracy (read-only). |
+| `mycelium verifier eligible <judge>` | Whether a judge is bonded enough to sit on panels (read-only). |
+| `mycelium verifier request-unstake` | Begin the unbonding period before withdrawing. |
+| `mycelium verifier withdraw` | Reclaim your (possibly slashed) stake after unbonding. |
+| `mycelium verifier slash <judge> --amount <xlm>` | Market only: cut a judge's stake (outlier/no-show), `--reason`. |
+| `mycelium verifier accuracy <judge> --agreed\|--disagreed` | Market only: record whether a verdict tracked the panel median. |
+
+```bash
+# Become a judge
+mycelium verifier register --tags "nvidia:deepseek-ai/deepseek-v4-pro,groq:llama-3.3-70b-versatile"
+mycelium verifier stake 100
+mycelium verifier info G...      # → stake, tags, eligible, accuracy
+
+# Leave the pool
+mycelium verifier request-unstake
+mycelium verifier withdraw
+```
+
+`slash` and `accuracy` are callable only by the verification market (the
+settlement path), not by ordinary judges.
 
 ---
 

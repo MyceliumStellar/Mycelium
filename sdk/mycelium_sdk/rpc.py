@@ -41,6 +41,29 @@ def is_transient(error: Exception) -> bool:
     return any(marker in str(error).lower() for marker in _TRANSIENT_MARKERS)
 
 
+class BadSequenceError(RuntimeError):
+    """
+    The RPC rejected a tx with txBAD_SEQ — the source account's sequence number
+    was stale, almost always because a just-submitted tx from the same account
+    hadn't ingested yet. Unlike a contract revert this is safe to retry, but only
+    by reloading the account and REBUILDING/re-signing with a fresh sequence (the
+    hash changes), so it is surfaced as its own type for the build layer to catch.
+    """
+
+
+def _is_bad_seq(error_result_xdr: str) -> bool:
+    """Decode a SendTransaction error_result_xdr and check for txBAD_SEQ (-5)."""
+    if not error_result_xdr:
+        return False
+    try:
+        from stellar_sdk import xdr as stellar_xdr
+
+        result = stellar_xdr.TransactionResult.from_xdr(error_result_xdr)
+        return result.result.code == stellar_xdr.TransactionResultCode.txBAD_SEQ
+    except Exception:  # noqa: BLE001 - detection must never mask the original error
+        return False
+
+
 def with_retry(
     fn,
     *,
@@ -108,8 +131,12 @@ def submit_transaction(soroban_rpc, signed_tx, *, retries: int = 5, base_delay: 
             )
             time.sleep(delay)
             continue
-        # ERROR or any other status is permanent — surface it.
+        # ERROR or any other status is permanent for THIS signed tx. A txBAD_SEQ
+        # is the one exception worth rebuilding for — raise it as its own type so
+        # the build layer can reload the account and re-sign.
+        error_xdr = getattr(send, "error_result_xdr", "") or ""
+        if _is_bad_seq(error_xdr):
+            raise BadSequenceError(f"txBAD_SEQ (hash {send.hash}); reload sequence and rebuild.")
         raise RuntimeError(
-            f"Transaction submission rejected: {send.status} "
-            f"{getattr(send, 'error_result_xdr', '') or ''}"
+            f"Transaction submission rejected: {send.status} {error_xdr}"
         )

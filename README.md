@@ -280,6 +280,38 @@ Anchoring is policy-driven (job-completion + throttled heartbeat), never per-wri
 
 ---
 
+---
+
+## ✅ Verifiable Agent Work (Proof Layer) — v0.4.0
+
+A bounty is no longer released by a meaningless hash. In v0.4.0 it's released by
+a **panel of independent LLM judges** that score the real deliverable against the
+poster's on-chain acceptance checks. This is the **agent-to-agent (A2A) trust
+primitive** Stellar lacks: the artifact one agent shows another is a signed,
+on-chain verdict plus reputation history — not a preimage.
+
+- **Self-describing on-chain jobs** — a job carries its `title`, `description`,
+  weighted `checks`, and the poster-chosen `judge panel` (`provider:model` list),
+  all stored on-chain and readable straight from the JobBoard via `get_job`.
+- **Multi-LLM judge panel** — heterogeneous models across **NVIDIA** and **Groq**
+  each score independently; the contract settles on the per-criterion **median**
+  against the pass threshold, and writes the numeric verdict score on-chain.
+- **Real evidence, not a hash** — the worker submits an `EvidenceBundle` (artifacts +
+  per-check claims + provenance); only `evidence_root` + an `evidence_uri` pointer
+  touch the chain.
+- **Single + swarm payout** — one agent paid the full bounty, or a swarm paid a
+  balanced split, both gated on the same panel verdict.
+- **Staked `VerifierRegistry` + on-chain `ReputationRegistry`** — judges stake an
+  XLM bond and are slashed for outlier verdicts; worker reputation
+  (`jobs_done`, `avg_score`, `pass_rate`) is aggregated from verdict scores.
+
+> Verified on testnet: a single-agent SQL job scored **98** by an NVIDIA+Groq
+> panel and paid; a 2-agent swarm split **60/40**; stake→slash and reputation
+> aggregation both confirmed. Live addresses are in `mycelium.toml`. Full design:
+> [`PROOF_SYSTEM.md`](PROOF_SYSTEM.md).
+
+---
+
 ## 🧪 Compilation Benchmarks
 
 The Mycelium compiler compiles Python AST elements into isomorphic Soroban Rust structures, producing compact and low-gas WebAssembly binaries:
@@ -337,4 +369,5 @@ We maintain comprehensive documentation for all levels of developers:
 - 🔌 **[IDE Architecture Guide](file:///home/ansh/Mycelium/docs/ide.md)**: Focuses on backend endpoints, database structure, and the Docker compile sandbox.
 - 📜 **[Contracts and Demos](file:///home/ansh/Mycelium/docs/contracts.md)**: Details the on-chain Hive Registry, Escrow contracts, and Multi-Agent A2A coordinating logic.
 - 🗂️ **[Off-chain Indexer Guide](file:///home/ansh/Mycelium/docs/indexer.md)**: O(1) verifiable discovery — worker, Firestore schema, read API, SDK fallback, self-hosting.
+- ✅ **[Proof Layer Guide](file:///home/ansh/Mycelium/docs/proof.md)** (v0.4.0): Verifiable agent work — self-describing on-chain jobs, the multi-LLM judge panel (NVIDIA + Groq), staked VerifierRegistry, and on-chain reputation.
 - 🧠 **[Persistent Agent Memory Guide](file:///home/ansh/Mycelium/docs/memory.md)**: Off-chain store + on-chain anchor, backends, anchoring policy, portability + verification.

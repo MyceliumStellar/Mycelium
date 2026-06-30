@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mycelium-sdk"
-version = "0.3.0"
+version = "0.4.0"
 description = "Mycelium on-chain agent SDK (signing, contract calls, hive discovery, x402)"
 readme = "README.md"
 requires-python = ">=3.10"

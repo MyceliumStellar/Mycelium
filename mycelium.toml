@@ -6,7 +6,19 @@ version = "0.1.0"
 network = "testnet"
 
 [jobs]
-board_address = "CAIGNIJBUA4GKKJBIO27JOAELZQ4KA7AYMB2F5C3W2D3DGQANZZCJGEH"
+# P1.5 proof-layer board: self-describing jobs (title + description + full spec
+# [checks + poster-chosen judge panel] stored ON-CHAIN), on-chain evidence_uri +
+# verdict score. Read any bounty straight from get_job. Testnet 2026-06-29.
+# Prior boards: CAV3VL7J… (P0/P1), CAIGNIJB… (pre-proof).
+board_address = "CDASJ42STDU42QXDXH3KRFNQWBURB54XPXV2WBXHWGPBA2BNAI5EYULO"
 
 [memory]
 anchor_address = "CAC27VKJEPDJJNI36NP7D7VH6WCHT6N5EITKSKPZIQNWA2VPEPBIXJSB"
+
+[verifier]
+# P2 staked judge pool (stake/slash/accuracy verified on testnet 2026-06-30).
+registry_address = "CBFELTFVBRGR5Y4VHOGFUJLNMMRDNBAOTTZUKZ3SNT625GDB4T76OHMC"
+
+[reputation]
+# On-chain agent reputation from verdict scores (verified on testnet 2026-06-30).
+registry_address = "CCTJCC5FELB4PSXT3OF4QSFKH456OIVHF3YGY7ABNFH7ITL7XWYBO2NE"

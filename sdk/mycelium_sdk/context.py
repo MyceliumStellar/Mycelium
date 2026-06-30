@@ -43,9 +43,11 @@ def reset_dry_run_log() -> None:
 # Soroban Symbols are limited to [a-zA-Z0-9_] and <= 32 chars; longer/other
 # strings are encoded as Soroban Strings instead.
 _SYMBOL_RE = re.compile(r"^[a-zA-Z0-9_]{1,32}$")
-# Polling cadence while waiting for a submitted transaction to settle.
+# Polling cadence while waiting for a submitted transaction to settle. Testnet
+# can take well over a minute to close a ledger under load, and a premature
+# timeout makes a tx that DID settle look failed — so we wait generously.
 _POLL_INTERVAL_SECONDS = 2
-_POLL_TIMEOUT_SECONDS = 60
+_POLL_TIMEOUT_SECONDS = 180
 
 
 class StellarNetwork(Enum):
@@ -256,23 +258,29 @@ class AgentContext:
 
         log.info(f"[SDK] Invoking {function_name} on {contract_id} (read_only={read_only})...")
         try:
-            if read_only:
-                # Simulation needs only a syntactically valid source account, not
-                # a funded/existing one — build it locally so views (resolve,
-                # discovery, getters) work without a wallet or RPC round-trip.
-                from stellar_sdk import Account
-
-                source = Account(self.keypair.public_key, 0)
-            else:
-                source = self.soroban_rpc.load_account(self.keypair.public_key)
             sc_args = self._marshal_args(contract_id, function_name, args, scval)
 
-            tx = (
-                TransactionBuilder(source, self.network_passphrase, base_fee=100)
-                .append_invoke_contract_function_op(contract_id, function_name, sc_args)
-                .set_timeout(300)
-                .build()
-            )
+            def _build_tx():
+                if read_only:
+                    # Simulation needs only a syntactically valid source account,
+                    # not a funded/existing one — build it locally so views
+                    # (resolve, discovery, getters) work without a wallet or RPC
+                    # round-trip.
+                    from stellar_sdk import Account
+
+                    source = Account(self.keypair.public_key, 0)
+                else:
+                    # Load a FRESH sequence each build so a bad-seq rebuild picks
+                    # up the just-ingested sequence number.
+                    source = self.soroban_rpc.load_account(self.keypair.public_key)
+                return (
+                    TransactionBuilder(source, self.network_passphrase, base_fee=100)
+                    .append_invoke_contract_function_op(contract_id, function_name, sc_args)
+                    .set_timeout(300)
+                    .build()
+                )
+
+            tx = _build_tx()
 
             # Always simulate first to surface contract errors cheaply. The
             # simulation also yields the function's return value deterministically
@@ -312,12 +320,30 @@ class AgentContext:
             # State-changing: assemble (footprint + fees), sign, submit, poll.
             # prepare/submit/poll are all retried on transient RPC failures;
             # submit re-sends the SAME signed tx on TRY_AGAIN_LATER (idempotent).
-            prepared = rpc_helpers.with_retry(
-                lambda: self.soroban_rpc.prepare_transaction(tx),
-                label="prepare_transaction",
-            )
-            prepared.sign(self.keypair)
-            send = rpc_helpers.submit_transaction(self.soroban_rpc, prepared)
+            # A txBAD_SEQ (stale sequence after a just-submitted tx from the same
+            # account) is recovered by reloading the account and rebuilding —
+            # that changes the hash, so it must rebuild, not re-send.
+            send = None
+            bad_seq_attempts = 0
+            while send is None:
+                prepared = rpc_helpers.with_retry(
+                    lambda: self.soroban_rpc.prepare_transaction(tx),
+                    label="prepare_transaction",
+                )
+                prepared.sign(self.keypair)
+                try:
+                    send = rpc_helpers.submit_transaction(self.soroban_rpc, prepared)
+                except rpc_helpers.BadSequenceError as bad_seq:
+                    bad_seq_attempts += 1
+                    if bad_seq_attempts > 8:
+                        raise
+                    delay = min(15.0, 1.5 * (2 ** (bad_seq_attempts - 1)))
+                    log.warning(
+                        f"{function_name}: {bad_seq}; reloading account and "
+                        f"rebuilding {bad_seq_attempts}/5 in {delay:.1f}s"
+                    )
+                    time.sleep(delay)
+                    tx = _build_tx()
             tx_hash = send.hash
 
             deadline = time.time() + _POLL_TIMEOUT_SECONDS
@@ -501,10 +527,14 @@ def _build_sign_submit(soroban_rpc, keypair, network_passphrase, append_op, *, l
     from stellar_sdk import xdr as stellar_xdr
     from stellar_sdk.soroban_rpc import GetTransactionStatus
 
-    source = soroban_rpc.load_account(keypair.public_key)
-    builder = TransactionBuilder(source, network_passphrase, base_fee=100)
-    append_op(builder)
-    tx = builder.set_timeout(300).build()
+    def _build_tx():
+        # Reload a fresh sequence each build so a bad-seq rebuild recovers.
+        source = soroban_rpc.load_account(keypair.public_key)
+        builder = TransactionBuilder(source, network_passphrase, base_fee=100)
+        append_op(builder)
+        return builder.set_timeout(300).build()
+
+    tx = _build_tx()
 
     sim = rpc_helpers.with_retry(
         lambda: soroban_rpc.simulate_transaction(tx),
@@ -514,12 +544,27 @@ def _build_sign_submit(soroban_rpc, keypair, network_passphrase, append_op, *, l
         raise RuntimeError(f"Simulation failed ({label}): {sim.error}")
     sim_return = AgentContext._decode_sim_result(sim, scval, stellar_xdr)
 
-    prepared = rpc_helpers.with_retry(
-        lambda: soroban_rpc.prepare_transaction(tx),
-        label=f"prepare_transaction({label})",
-    )
-    prepared.sign(keypair)
-    send = rpc_helpers.submit_transaction(soroban_rpc, prepared)
+    # Submit, recovering from a stale-sequence rejection by reloading + rebuilding
+    # (the hash changes, so this rebuilds rather than re-sends).
+    send = None
+    bad_seq_attempts = 0
+    while send is None:
+        prepared = rpc_helpers.with_retry(
+            lambda: soroban_rpc.prepare_transaction(tx),
+            label=f"prepare_transaction({label})",
+        )
+        prepared.sign(keypair)
+        try:
+            send = rpc_helpers.submit_transaction(soroban_rpc, prepared)
+        except rpc_helpers.BadSequenceError as bad_seq:
+            bad_seq_attempts += 1
+            if bad_seq_attempts > 5:
+                raise
+            delay = min(8.0, 1.0 * (2 ** (bad_seq_attempts - 1)))
+            log.warning(f"{label}: {bad_seq}; reloading account and rebuilding "
+                        f"{bad_seq_attempts}/5 in {delay:.1f}s")
+            time.sleep(delay)
+            tx = _build_tx()
     tx_hash = send.hash
 
     deadline = time.time() + _POLL_TIMEOUT_SECONDS

@@ -151,6 +151,12 @@ parses a contract source file:
    (`instance`, `persistent`, `temporary`) is chosen by the function's
    `@state.*` decorator.
 
+   **Per-address keys.** For storage keyed by an account, concatenate the raw
+   `Address` onto a prefix — `storage.set("stake:" + addr, value)` — which the
+   compiler maps to a `(Symbol, Address)` tuple ledger key. Do **not** wrap the
+   address with `str()` in new contracts; pass the raw `Address`. (Only the older
+   `memory_anchor` contract uses the `str(addr)` form.)
+
 4. **Environment injections**: Auto-prepends `env: Env` as the first argument
    in generated Rust functions. The Python `__init__` constructor is skipped
    (Soroban contracts have no Python-style constructor).

@@ -4,20 +4,22 @@
 Where `mycelium pay` is an *unconditional* transfer, a deal is *conditional*
 x402 commerce between two agents: the payer locks funds into a fresh escrow
 payable to a provider (resolved by Hive Registry unique name or raw address),
-and the provider only collects once it publishes a proof of the agreed task.
-If the provider never delivers, the payer reclaims the funds after the timeout.
+and the provider only collects once a `judge` authorizes release on a passing
+verdict of the delivered work. If no release happens, the payer reclaims the
+funds after the timeout.
 
 This is the CLI front door to what `a2a_demo.py` / `EscrowPaymentRouter` do by
-hand — two sovereign agents transacting purely through on-chain state:
+hand — two sovereign agents transacting purely through on-chain state, with a
+judge as the impartial release authority (see PROOF_SYSTEM.md):
 
-  open    payer locks `amount` XLM to a provider against a task hash → escrow id
-  release provider (or payer) publishes the proof preimage → funds disburse
+  open    payer locks `amount` XLM to a provider, naming a judge → escrow id
+  release the judge authorizes payout (passing verdict) → funds disburse
   refund  payer reclaims the locked funds after the deadline passes
-  status  read the escrow's current state (amount, provider, deadline, settled)
+  status  read the escrow's current state (amount, provider, judge, settled)
 
-The escrow contract enforces the proof (SHA-256(proof) == task_hash) and the
-deadline on-chain, so neither side has to trust the other. The board/registry
-default from `mycelium.toml`, mirroring `deploy` / `register` / `job`.
+Release follows a judge's verdict rather than a SHA-256 preimage: a hash only
+proved the claimant could echo the agreed bytes, never that the work was done.
+The board/registry default from `mycelium.toml`, mirroring `deploy` / `job`.
 
 Commands: open, release, refund, status.
 """
@@ -77,38 +79,40 @@ def _resolve_agent_address(context, agent: str, registry: Optional[str]) -> str:
     return addr
 
 
-def _task_bytes(task: str) -> bytes:
-    """A task file's raw bytes, or the UTF-8 bytes of a literal string."""
-    if os.path.isfile(task):
-        with open(task, "rb") as f:
-            return f.read()
-    return task.encode("utf-8")
+def _evidence_root(evidence: str) -> bytes:
+    """The 32-byte evidence_root: SHA-256 of a file's bytes or a literal string."""
+    if os.path.isfile(evidence):
+        with open(evidence, "rb") as f:
+            data = f.read()
+    else:
+        data = evidence.encode("utf-8")
+    return hashlib.sha256(data).digest()
 
 
 @deal_app.command("open")
 def open_deal(
     to: str = typer.Option(..., "--to", help="Provider: Hive Registry unique name or G/C address to pay"),
     amount: str = typer.Option(..., "--amount", help="Amount in XLM to lock for the provider"),
-    task: str = typer.Option(..., "--task", help="Task spec file or string; its SHA-256 is the release condition"),
+    judge: str = typer.Option(..., "--judge", help="Judge: unique name or G/C address — the release authority"),
     token: str = typer.Option(None, "--token", help="Payment token contract (defaults to native XLM SAC)"),
     timeout: int = typer.Option(DEFAULT_TIMEOUT_SECONDS, "--timeout", help="Refund deadline in seconds"),
     network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
     registry: str = typer.Option(None, "--registry", help="Hive Registry id override (for name resolution)"),
 ):
-    """Payer locks `amount` XLM to a provider against a task hash; prints the escrow id."""
+    """Payer locks `amount` XLM to a provider, naming a judge as the release authority."""
     from mycelium_sdk.x402.settlement import EscrowPaymentRouter
 
     context = _context(network, wallet, signing=True)
     provider = _resolve_agent_address(context, to, registry)
-    task_hash = hashlib.sha256(_task_bytes(task)).digest()
+    judge_addr = _resolve_agent_address(context, judge, registry)
 
-    typer.echo(f"[deal] Locking {amount} XLM to provider {to} ({provider[:8]}…) for {timeout}s...")
+    typer.echo(f"[deal] Locking {amount} XLM to provider {to} ({provider[:8]}…), judge {judge_addr[:8]}…, for {timeout}s...")
     try:
         escrow_id = EscrowPaymentRouter(context).create_locked_escrow(
             provider_id=provider,
             amount_xlm=Decimal(amount),
-            task_hash=task_hash,
+            judge=judge_addr,
             token=token,
             timeout_seconds=timeout,
         )
@@ -116,23 +120,23 @@ def open_deal(
         typer.echo(f"❌ deal open failed: {e}")
         raise typer.Exit(code=1)
     typer.echo(f"✓ Deal opened. Escrow {escrow_id}")
-    typer.echo(f"  Provider releases with: mycelium deal release {escrow_id} --proof <task>")
+    typer.echo(f"  Judge releases with: mycelium deal release {escrow_id} --evidence <bundle>")
     typer.echo(f"  Payer refunds after {timeout}s with: mycelium deal refund {escrow_id}")
 
 
 @deal_app.command("release")
 def release(
     escrow_id: str = typer.Argument(..., help="Escrow contract id from `deal open`"),
-    proof: str = typer.Option(..., "--proof", help="Proof file or string (must SHA-256 to the task hash)"),
+    evidence: str = typer.Option(..., "--evidence", help="Evidence bundle file/string (its SHA-256 is recorded for audit)"),
     network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
-    wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
+    wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Judge wallet path (the escrow's release authority)"),
 ):
-    """Disburse the locked funds to the provider by publishing the task proof."""
+    """Judge disburses the locked funds to the provider on a passing verdict."""
     from mycelium_sdk.x402.settlement import EscrowPaymentRouter
 
     context = _context(network, wallet, signing=True)
     try:
-        EscrowPaymentRouter(context).release_funds(escrow_id, _task_bytes(proof))
+        EscrowPaymentRouter(context).release_funds(escrow_id, _evidence_root(evidence))
     except Exception as e:  # noqa: BLE001
         typer.echo(f"❌ deal release failed: {e}")
         raise typer.Exit(code=1)
@@ -177,10 +181,12 @@ def status(
 
     amount = _get("amount")
     provider = _get("provider")
+    judge = _get("judge")
     deadline = _get("deadline")
     settled = _get("settled")
     typer.echo(f"Deal escrow {escrow_id}")
     typer.echo(f"  amount   : {int(amount) / 10_000_000:.7f} XLM" if amount is not None else "  amount   : —")
     typer.echo(f"  provider : {getattr(provider, 'address', provider)}")
+    typer.echo(f"  judge    : {getattr(judge, 'address', judge)}")
     typer.echo(f"  deadline : {int(deadline)} (unix)" if deadline is not None else "  deadline : —")
     typer.echo(f"  settled  : {bool(settled)}")

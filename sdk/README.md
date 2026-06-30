@@ -73,6 +73,46 @@ Manages multi-agent escrow settlements and trustless commerce routing.
 ### 4. `run_agent_loop`
 Executes autonomous agent orchestration loops wired to cloud LLM APIs (Anthropic, Gemini, etc.) and exposes on-chain interactions as executable LLM tools.
 
+### 5. `mycelium_sdk.proof` (Proof Layer — v0.4.0)
+The verifiable agent-work layer: a bounty is released when a panel of independent
+LLM judges scores the real deliverable against the poster's on-chain checks.
+
+* `Rubric` / `Criterion` — the v2 job spec (title, description, weighted checks, judge panel).
+* `EvidenceBundle` — the worker's artifacts + per-check claims + provenance (anchored by `evidence_root`).
+* `Verdict` — the panel's per-criterion scores, weighted total `score`, and `passed`.
+* `Judge`, `JudgePanel` / `Seat` — one model seat and the heterogeneous panel that scores and takes the per-criterion median.
+* `ContentAgent` — reads a job's rubric from chain, produces the deliverable for any job type (draft → self-review → revise), submits real evidence.
+* **Providers** — `resolve_completer("provider:model")` and `list_models()` for NVIDIA NIM + Groq (any OpenAI-compatible endpoint; keys from env).
+* `VerifierRegistryClient` — judge staking pool: `register`, `stake`, `slash`, `eligible`, accuracy.
+* `ReputationClient` — portable worker reputation aggregated from verdict scores.
+
+`JobBoardClient` ties it together with `post_bounty`, `execute_job`, and
+`judge_and_settle` (runs the job's prescribed panel → records verdict + score →
+releases), plus `fetch_rubric`, `submit_evidence`, `record_verdict`, `settle`.
+
+```python
+from mycelium_sdk.proof import JobBoardClient, Rubric, Criterion
+
+board = JobBoardClient(context)
+
+# Poster: a self-describing on-chain job + judge panel
+job_id = board.post_bounty(Rubric(
+    title="Write a sales-report SQL query",
+    description="Aggregate revenue by region, last 12 months.",
+    criteria=[Criterion("correct", weight=70, check="returns correct rows"),
+              Criterion("style",   weight=30, check="readable, indexed")],
+    judges=["nvidia:meta/llama-3.1-70b", "groq:llama-3.3-70b"],
+    threshold=75,
+), amount="50")
+
+# Worker: do the job, then run the panel and settle on a passing verdict
+board.execute_job(job_id, model="groq:llama-3.3-70b")
+verdict = board.judge_and_settle(job_id)   # NVIDIA+Groq panel → score → release
+print(verdict.score, verdict.passed)
+```
+
+See [`PROOF_SYSTEM.md`](../PROOF_SYSTEM.md) for the full architecture.
+
 ---
 
 ## Code Example: Autonomous Payment Agent

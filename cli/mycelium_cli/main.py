@@ -25,6 +25,7 @@ from mycelium_cli.commands.test import run_test
 from mycelium_cli.commands.jobs import job_app
 from mycelium_cli.commands.deal import deal_app
 from mycelium_cli.commands.memory import memory_app
+from mycelium_cli.commands.verifier import verifier_app
 
 app = typer.Typer(help="Mycelium Developer Framework CLI")
 # Sovereign Job Boards: `mycelium job post|list|claim|assign|join|submit|finalize|status`
@@ -35,11 +36,14 @@ app.add_typer(deal_app, name="deal")
 # Persistent agent memory (off-chain store + tiny on-chain anchor):
 # `mycelium memory remember|recall|anchor|verify|rehydrate|status`
 app.add_typer(memory_app, name="memory")
+# Staked judge pool (P2 trustless verification):
+# `mycelium verifier register|stake|info|eligible|slash|accuracy`
+app.add_typer(verifier_app, name="verifier")
 
 PASSPHRASE_ENV_VAR = "MYCELIUM_DECRYPT_KEY"
 
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 
 def _version_callback(value: bool):

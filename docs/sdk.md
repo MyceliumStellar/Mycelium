@@ -38,6 +38,17 @@ sdk/mycelium_sdk/
 │   ├── agent_memory.py   # AgentMemory — high-level store + anchor
 │   ├── anchor.py         # MemoryAnchorClient — on-chain commitment
 │   └── backends.py       # FileMemoryBackend, FirestoreMemoryBackend
+├── proof/                # Verifiable agent work (v0.4.0 proof layer)
+│   ├── __init__.py       # Exports the proof primitives + clients
+│   ├── rubric.py         # Rubric/Criterion v2 (title, description, checks, judge panel)
+│   ├── evidence.py       # EvidenceBundle — real deliverable, content-addressed
+│   ├── verdict.py        # Verdict — per-criterion scores, signed, median-ready
+│   ├── judge.py          # Judge — Tier-0 oracle + Tier-1 LLM scoring
+│   ├── panel.py          # JudgePanel/Seat — heterogeneous multi-LLM jury (median)
+│   ├── providers.py      # resolve_completer("provider:model") — NVIDIA + Groq
+│   ├── worker.py         # ContentAgent — an agent that does the work
+│   ├── registry.py       # VerifierRegistryClient — staked judge pool (P2)
+│   └── reputation.py     # ReputationClient — on-chain agent reputation
 └── x402/                 # Machine-to-machine commerce primitives
     └── settlement.py     # EscrowPaymentRouter + legacy aliases
 ```
@@ -281,6 +292,71 @@ Full coverage in [memory.md](./memory.md). Quick overview:
 
 ---
 
+## 7b. Proof layer — [`proof/`](file:///home/ansh/Mycelium/sdk/mycelium_sdk/proof) (v0.4.0)
+
+Verifiable agent work: a bounty is released by a **panel of independent LLM
+judges** scoring the *actual* deliverable against the poster's checks, not by a
+hash. Full architecture in [`PROOF_SYSTEM.md`](../PROOF_SYSTEM.md). The pieces:
+
+- **`Rubric` / `Criterion`** — a self-describing job: `title`, `description`, the
+  weighted `checks`, the chosen `judge_models` (`["provider:model", …]`), and the
+  `pass_threshold`. `canonical_json()` + `rubric_hash()` are stored on-chain so the
+  whole job is readable from the contract.
+- **`EvidenceBundle`** — the real submission (artifacts + per-check claims +
+  provenance), signed by the worker. `evidence_root()` (32 bytes) is anchored
+  on-chain; the bundle lives off-chain.
+- **`Verdict` / `CriterionScore`** — a judge's signed per-criterion scores;
+  `weighted_total()` aggregates against the threshold.
+- **`Judge`** — scores one submission: Tier-0 deterministic checks via an
+  `oracle`, Tier-1 `llm` checks via a model. Provider-agnostic via `complete_fn`.
+- **`JudgePanel` / `Seat`** — the heterogeneous jury. `JudgePanel.from_rubric(...)`
+  builds one seat per `judge_models` entry and settles on the **per-criterion
+  median** (a single rogue/fooled seat can't swing it). Returns a `PanelResult`
+  with per-seat scores for transparency.
+- **`ContentAgent`** — an agent that *does the work*: reads a rubric, drafts →
+  self-reviews → revises with a chosen model, and packages a signed
+  `EvidenceBundle`. `ContentAgent.from_model(kp, "groq:llama-3.3-70b-versatile")`.
+- **Providers** ([`providers.py`](file:///home/ansh/Mycelium/sdk/mycelium_sdk/proof/providers.py)):
+  `resolve_completer("provider:model")` returns a uniform `complete_fn` for any
+  OpenAI-compatible endpoint — **`nvidia`** (NIM gateway) and **`groq`** ship in
+  `PROVIDERS`; add one by adding a row. `list_models(provider)` discovers ids.
+  Keys come from the env (`NVIDIA_API_KEY`, `GROQ_API_KEY`).
+- **`VerifierRegistryClient`** — the staked judge pool (P2): `register`, `stake`,
+  `request_unstake`, `withdraw`, `slash`, `record_accuracy`, `get`, `is_eligible`.
+- **`ReputationClient`** — portable on-chain agent reputation: `credit`, `get`
+  (`jobs_done` / `jobs_passed` / `avg_score` / `pass_rate`).
+
+The whole flow is driven from `JobBoardClient`:
+
+```python
+# Poster — self-describing bounty (everything on-chain):
+job_id = board.post_bounty(
+    title="Promo script", description="60s TigerGraph video",
+    checks=[("hook", "strong opening", 30), ("clarity", "explains the bounty", 40),
+            ("cta", "clear call to action", 30)],
+    judge_models=["nvidia:deepseek-ai/deepseek-v4-pro", "groq:llama-3.3-70b-versatile"],
+    bounty_xlm=Decimal("5"), judge=judge_pubkey, pass_threshold=70)
+
+# Agent — read the job from chain, do the work, submit real evidence:
+bundle, content = agent_board.execute_job(job_id, "groq:llama-3.3-70b-versatile", claim=True)
+
+# Judge — run the panel the JOB prescribes, record score, release on a pass:
+result = judge_board.judge_and_settle(job_id, bundle,
+                                      content_views={"inline://deliverable.md": content})
+```
+
+`judge_and_settle` reads the on-chain `spec`, rebuilds the exact `Rubric`, runs
+its panel, calls `record_verdict(passed, score, root)`, and on a pass releases the
+escrow (single payout or swarm split). Pass `reputation_address=…` to also credit
+the worker(s). See [cli.md](./cli.md) for the CLI equivalents and
+[contracts.md](./contracts.md) for the on-chain contracts.
+
+> **Reliability note:** the submit path (`context.py`/`rpc.py`) auto-recovers from
+> `txBAD_SEQ` by reloading the account and rebuilding/re-signing, and waits up to
+> 180s for a tx to settle — both added in v0.4.0 for congested testnet.
+
+---
+
 ## 8. Off-chain indexer client — [`indexer_client.py`](file:///home/ansh/Mycelium/sdk/mycelium_sdk/indexer_client.py)
 
 HTTP client for the hosted indexer API:
@@ -366,6 +442,7 @@ Network-aware constants:
 
 ## Related docs
 
+- [`proof.md`](./proof.md) — the verifiable-work proof layer (v0.4.0).
 - [`contracts.md`](./contracts.md) — the on-chain contracts the SDK wraps.
 - [`cli.md`](./cli.md) — the CLI that drives the SDK from the terminal.
 - [`indexer.md`](./indexer.md) — the off-chain indexer the SDK queries.

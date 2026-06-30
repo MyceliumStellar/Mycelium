@@ -6,6 +6,96 @@ are documented here. The four components are versioned together.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-06-30
+
+The **proof-of-work** release. Mycelium gains a real **verifiable-work layer**: a
+bounty is no longer released by a meaningless hash, but by a **panel of
+independent LLM judges** scoring the actual deliverable against the poster's
+acceptance checks. This is the agent-to-agent (A2A) trust primitive Stellar
+lacks. The compiler rejoins the unified version line; `mycelium-sdk`,
+`mycelium-cli`, `mycelium-compiler`, and the `mycelium-stellar` metapackage all
+move to `0.4.0`.
+
+> **The tautology that's gone.** Before, `submit_proof`/`claim_funds` checked
+> `SHA256(proof) == spec_hash` — satisfied only by echoing the job spec back. It
+> proved a worker could *read*, never that work was *done* or *good*. "I need a
+> Canva deck" has no preimage. v0.4.0 replaces it with verdict-gated release.
+
+### The proof layer (new)
+- **Self-describing on-chain jobs.** A job now carries its `title`, `description`,
+  the **acceptance checks** (weighted), and the **poster-chosen judge panel**
+  (`provider:model` list) — all stored on-chain and hashed for integrity, so any
+  bounty is fully readable straight from the JobBoard contract via `get_job` with
+  no off-chain dependency.
+- **Multi-LLM judge panel.** The job's chosen panel (heterogeneous models across
+  **NVIDIA** and **Groq**) each scores the real deliverable independently; the
+  contract settles on the **per-criterion median** against the pass threshold.
+  Model diversity defeats single-model prompt-injection; the median defeats a
+  single rogue seat. The numeric verdict **score** is written on-chain.
+- **Real evidence, not a hash.** The worker submits an `EvidenceBundle` (the
+  actual artifacts + per-check claims + provenance); its `evidence_root` **and** an
+  `evidence_uri` pointer go on-chain (bulk data stays off-chain by hash — the
+  correct split), so the proof is discoverable and tamper-evident.
+- **Worker agents.** `ContentAgent` reads a job's rubric from chain, produces the
+  deliverable for *any* job type (content, SQL, outlines, …) with a chosen model,
+  drafts→self-reviews→revises, and submits real evidence.
+- **Single + swarm payout.** A single agent is paid the full bounty on a passing
+  verdict; a **swarm** of agents is paid a balanced split per their recorded
+  shares — both gated on the same panel verdict.
+- **P2 trustless foundation — `VerifierRegistry`.** A staked judge pool: judges
+  `register` model capability, `stake` an XLM bond to become eligible, and are
+  `slash`ed by the verification market for outlier/no-show verdicts; per-judge
+  **accuracy** (verifier reputation) is tracked. (Commit-reveal market, random
+  panel selection, and dispute escalation are specified in `PROOF_SYSTEM.md §11`
+  as the next stages.)
+- **Agent reputation — `ReputationRegistry`.** Portable, on-chain worker
+  reputation aggregated from verdict scores (`jobs_done`, `jobs_passed`,
+  `avg_score`, `pass_rate`), idempotent per job, credited at verdict time
+  (single agent or each swarm member). The A2A trust signal. Plan: §12.
+
+### Added
+- **`mycelium_sdk.proof`** package: `Rubric`/`Criterion` (v2: title, description,
+  checks, judge panel), `EvidenceBundle`, `Verdict`, `Judge`, `JudgePanel`/`Seat`,
+  `ContentAgent`, `VerifierRegistryClient`, `ReputationClient`, and a provider
+  registry (`resolve_completer("provider:model")`, `list_models`) for NVIDIA NIM +
+  Groq (any OpenAI-compatible endpoint; keys from env).
+- **`JobBoardClient`** high-level flow: `post_bounty`, `execute_job`,
+  `judge_and_settle` (runs the panel the job prescribes → records verdict+score →
+  releases), `fetch_rubric`, plus `submit_evidence`, `record_verdict`,
+  `release_bounty`, `settle`.
+- **New contracts**: `verifier_registry.py`, `reputation_registry.py`.
+- **CLI**: `mycelium job post --title --description --check id:weight:text
+  --judge-model provider:model --threshold`, `job do --model`, `job judge`,
+  `job models --provider`, richer `job status` (on-chain title/checks/panel/score);
+  new **`mycelium verifier`** group (`register|stake|info|eligible|slash|accuracy|
+  request-unstake|withdraw`).
+- **Indexer** serves on-chain `title`/`description`/`spec` (checks + panel) per
+  job, so the bounty page renders the real job; API version `0.4.0`.
+
+### Changed (breaking — contracts redeployed on testnet)
+- **Escrow** releases on a **judge's verdict**, not a SHA-256 preimage:
+  `initialize(…, judge, …)`; `claim_funds`/`claim_and_split` require
+  `judge.require_auth()` and take an `evidence_root` (recorded for audit).
+- **JobBoard**: `post_job` now stores `title`/`description`/`spec`/`rubric_hash` +
+  `judge`; `submit_proof` → `submit_evidence(evidence_root, evidence_uri)` (no
+  hash check); new `record_verdict(passed, score, evidence_root)`; `finalize`
+  requires a `verified` job. Lifecycle: open → claimed → submitted →
+  verified/rejected → done.
+- **SDK reliability** (helps every flow): automatic `txBAD_SEQ` recovery
+  (reload account + rebuild/re-sign) and the settle-poll timeout raised 60s → 180s
+  for congested testnet.
+- **Compiler** rejoins the unified version (`0.2.0` → `0.4.0`). Note for contract
+  authors: per-address storage keys use the raw `Address`
+  (`storage.set("stake:" + addr, …)`); the compiler maps `"prefix:" + addr` to a
+  `(Symbol, Address)` tuple key.
+
+### Verified on testnet
+Single-agent (SQL job, NVIDIA+Groq panel → score 98 → paid), 2-agent swarm
+(60/40 split), `VerifierRegistry` (stake → slash → ineligible + accuracy),
+`ReputationRegistry` (aggregate scores, idempotent). Live addresses are recorded
+in `mycelium.toml` (`[jobs]`, `[verifier]`, `[reputation]`). See `PROOF_SYSTEM.md`
+for the full architecture and the P2/reputation roadmap.
+
 ## [0.3.0] — 2026-06-26
 
 The **scale & hardening** release. Two pre-pitch scaling pillars land — an

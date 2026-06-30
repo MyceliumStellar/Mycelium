@@ -196,12 +196,15 @@ class IndexerWorker:
             "posted_ledger": rec.get("ledger"),
         }
         # Enrich once with the immutable fields the event doesn't carry. The
-        # event-driven status/agent set elsewhere stays authoritative, so we only
-        # copy token/mode/escrow/deadline here.
+        # event-driven status/agent set elsewhere stays authoritative. The job is
+        # self-describing on-chain, so we also copy its title / description / spec
+        # (checks + chosen judge panel) + judge here, so the bounty page can render
+        # the real job without its own chain round-trip.
         if job_id not in self._job_enriched and self._resolve_job is not None:
             try:
                 details = self._resolve_job(job_id) or {}
-                for key in ("token", "mode", "escrow", "deadline"):
+                for key in ("token", "mode", "escrow", "deadline", "judge",
+                            "title", "description", "spec", "rubric_hash"):
                     if details.get(key) is not None:
                         doc[key] = details[key]
             except Exception:

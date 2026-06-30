@@ -43,7 +43,7 @@ interface Job {
   description: string;
 }
 
-const JOB_BOARD_ADDRESS = "CAIGNIJBUA4GKKJBIO27JOAELZQ4KA7AYMB2F5C3W2D3DGQANZZCJGEH";
+const JOB_BOARD_ADDRESS = "CDASJ42STDU42QXDXH3KRFNQWBURB54XPXV2WBXHWGPBA2BNAI5EYULO";
 const HIVE_REGISTRY_ADDRESS = "CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC";
 
 // Hosted off-chain indexer — O(1) discovery. The board reads from it first and
@@ -58,6 +58,31 @@ function mapIndexerJob(j: any, members: string[], shares: number[]): Job {
   const id = Number(j.job_id);
   const bounty = Number(j.bounty || 0) / 10000000;
   const escrow = j.escrow || "";
+
+  // The job is self-describing on-chain: prefer the real title/description and
+  // surface the acceptance checks + the chosen judge panel from the spec. Falls
+  // back to the synthetic text for legacy jobs posted before P1.5.
+  let title = j.title || `On-Chain Bounty #${id}`;
+  let description =
+    j.description ||
+    `Sovereign Job #${id} coordination pipeline. Deployed on Stellar Testnet, locking a bounty of ${bounty} XLM. Payout release requires a valid cryptographic proof submitted to escrow contract ${
+      escrow ? `${escrow.slice(0, 10)}...${escrow.slice(-6)}` : "(pending)"
+    }.`;
+  try {
+    if (j.spec) {
+      const spec = JSON.parse(j.spec);
+      const checks = (spec.criteria || [])
+        .map((c: any) => `${c.id} (${c.weight})`)
+        .join(", ");
+      const panel = (spec.judges?.models || []).join(", ");
+      if (checks) {
+        description += `\n\nChecks: ${checks}\nJudge panel: ${panel}\nPass score: ${spec.pass_threshold}`;
+      }
+    }
+  } catch {
+    /* leave the fallback description */
+  }
+
   return {
     id,
     poster: j.poster || "",
@@ -70,10 +95,8 @@ function mapIndexerJob(j: any, members: string[], shares: number[]): Job {
     agent: j.agent || "",
     members,
     shares,
-    title: `On-Chain Bounty #${id}`,
-    description: `Sovereign Job #${id} coordination pipeline. Deployed on Stellar Testnet, locking a bounty of ${bounty} XLM. Payout release requires a valid cryptographic proof submitted to escrow contract ${
-      escrow ? `${escrow.slice(0, 10)}...${escrow.slice(-6)}` : "(pending)"
-    }.`,
+    title,
+    description,
   };
 }
 
@@ -1614,18 +1637,13 @@ function CreateBountyModal({ walletAddress, walletNetwork, onClose }: CreateBoun
       const amountStroops = BigInt(Math.floor(parseFloat(bountyXlm) * 10000000));
       const textEncoder = new TextEncoder();
       
-      // Calculate task SHA-256 hash from description
-      const taskHashBuf = Buffer.from(
-        new Uint8Array(await crypto.subtle.digest("SHA-256", textEncoder.encode(jobDescription)))
-      );
-
-      // args: depositor, provider, token, amount, task_hash, timeout_seconds
+      // args: depositor, provider, token, amount, judge, timeout_seconds
       const initArgs = [
         StellarSdk.Address.fromString(walletAddress).toScVal(),
-        StellarSdk.Address.fromString(walletAddress).toScVal(),
+        StellarSdk.Address.fromString(walletAddress).toScVal(), // placeholder provider is poster
         StellarSdk.Address.fromString(tokenAddress).toScVal(),
         StellarSdk.nativeToScVal(amountStroops, { type: "i128" }),
-        StellarSdk.xdr.ScVal.scvBytes(taskHashBuf),
+        StellarSdk.Address.fromString(walletAddress).toScVal(), // judge is the poster/user
         StellarSdk.nativeToScVal(BigInt(deadlineSeconds), { type: "u64" })
       ];
 
@@ -1658,18 +1676,57 @@ function CreateBountyModal({ walletAddress, walletNetwork, onClose }: CreateBoun
       const accData4 = await accRes4.json();
       sourceAccount = new StellarSdk.Account(walletAddress, accData4.sequence);
 
-      // Embedded title + description into spec_uri
-      const specUriString = `${jobTitle}|${jobDescription}`;
+      // Construct the Rubric spec JSON
+      const rubricJson = {
+        version: 2,
+        title: jobTitle,
+        job: jobDescription,
+        deliverable_type: "any",
+        criteria: [
+          {
+            id: "satisfy-spec",
+            type: "llm",
+            check: "Satisfy the requirements detailed in the job description",
+            weight: 100
+          }
+        ],
+        pass_threshold: 70,
+        judges: {
+          models: ["nvidia:meta/llama-3.3-70b-instruct"],
+          aggregate: "median"
+        }
+      };
 
-      // args: poster, spec_uri, spec_hash, bounty, token, mode, escrow, deadline
+      const canonicalJson = (obj: any): string => {
+        if (typeof obj !== 'object' || obj === null) {
+          return JSON.stringify(obj);
+        }
+        if (Array.isArray(obj)) {
+          return '[' + obj.map(canonicalJson).join(',') + ']';
+        }
+        const sortedKeys = Object.keys(obj).sort();
+        const parts = sortedKeys.map(k => `"${k}":${canonicalJson(obj[k])}`);
+        return '{' + parts.join(',') + '}';
+      };
+      
+      const canonicalSpecString = canonicalJson(rubricJson);
+      const specBytes = textEncoder.encode(canonicalSpecString);
+      const specHashBuf = Buffer.from(
+        new Uint8Array(await crypto.subtle.digest("SHA-256", specBytes))
+      );
+
+      // args: poster, title, description, spec, rubric_hash, bounty, token, mode, escrow, judge, deadline
       const postArgs = [
         StellarSdk.Address.fromString(walletAddress).toScVal(),
-        StellarSdk.xdr.ScVal.scvBytes(Buffer.from(specUriString, "utf-8")),
-        StellarSdk.xdr.ScVal.scvBytes(taskHashBuf),
+        StellarSdk.xdr.ScVal.scvBytes(Buffer.from(jobTitle, "utf-8")),
+        StellarSdk.xdr.ScVal.scvBytes(Buffer.from(jobDescription, "utf-8")),
+        StellarSdk.xdr.ScVal.scvBytes(Buffer.from(canonicalSpecString, "utf-8")),
+        StellarSdk.xdr.ScVal.scvBytes(specHashBuf),
         StellarSdk.nativeToScVal(amountStroops, { type: "i128" }),
         StellarSdk.Address.fromString(tokenAddress).toScVal(),
         StellarSdk.xdr.ScVal.scvSymbol(mode),
         StellarSdk.Address.fromString(escrowId).toScVal(),
+        StellarSdk.Address.fromString(walletAddress).toScVal(), // judge is the poster/user
         StellarSdk.nativeToScVal(BigInt(deadlineSeconds), { type: "u64" })
       ];
 
@@ -1782,7 +1839,7 @@ function CreateBountyModal({ walletAddress, walletNetwork, onClose }: CreateBoun
               <label style={labelStyle}>Job description (spec details)</label>
               <textarea 
                 style={{ ...inputStyle, height: "100px", resize: "none" }} 
-                placeholder="Describe the exact task requirement. This description string is hashed on-chain to verify agent execution proofs." 
+                placeholder="Describe the exact task requirement. A rubric will be generated and hashed on-chain to verify agent execution." 
                 value={jobDescription}
                 onChange={e => setJobDescription(e.target.value)} 
               />

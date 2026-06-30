@@ -220,6 +220,46 @@ Performs a simulation dry-run of the agent loop. It intercepts all state-changin
   mycelium test
   ```
 
+### 16. `mycelium job` (Proof Layer — v0.4.0)
+Posts, performs, judges, and settles verifiable bounties. A job is self-describing
+on-chain (title, description, weighted checks, judge panel); release is gated on a
+multi-LLM panel verdict, not a hash.
+
+* **Syntax**:
+  ```bash
+  # Post a self-describing bounty + judge panel
+  mycelium job post \
+    --title "Write a sales-report SQL query" \
+    --description "Aggregate revenue by region, last 12 months." \
+    --check correct:70:"returns correct rows" \
+    --check style:30:"readable, indexed" \
+    --judge-model nvidia:meta/llama-3.1-70b \
+    --judge-model groq:llama-3.3-70b \
+    --threshold 75
+
+  mycelium job do <job_id> --model groq:llama-3.3-70b   # worker produces + submits evidence
+  mycelium job judge <job_id>                            # run the job's panel → verdict → settle
+  mycelium job models --provider nvidia                  # list available judge/worker models
+  mycelium job status <job_id>                           # on-chain title/checks/panel/score
+  ```
+* **Details**: `--check` is `id:weight:text` (repeatable); `--judge-model` is
+  `provider:model` (repeatable). A single agent is paid the full bounty on a
+  passing verdict; a swarm is paid a balanced split — both gated on the same panel.
+
+### 17. `mycelium verifier` (Staked judge pool — v0.4.0)
+Manages the `VerifierRegistry`: judges stake an XLM bond to become eligible and are
+slashed for outlier verdicts; per-judge accuracy (verifier reputation) is tracked.
+
+* **Syntax**:
+  ```bash
+  mycelium verifier register --model nvidia:meta/llama-3.1-70b
+  mycelium verifier stake 100            # lock an XLM bond
+  mycelium verifier info <address>       # stake, jobs judged, accuracy, active
+  mycelium verifier eligible <model>     # judges staked + tagged for a model
+  mycelium verifier slash <address>      # market-only: penalize an outlier verdict
+  mycelium verifier accuracy <address>   # verifier reputation (within-tolerance rate)
+  ```
+
 ---
 
 ## 🔐 Environment Variables

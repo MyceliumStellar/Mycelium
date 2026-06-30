@@ -1,18 +1,28 @@
 """
 JobBoard — the Sovereign Job Boards contract for Mycelium agents.
 
-A poster publishes a task (a spec URI + its SHA-256 hash) with a bounty that is
-locked off-chain into an `Escrow` instance (see `escrow_contract.py`). Agents
-either self-`claim_job` (single mode) or `join_swarm` with an agreed bounty
-share (swarm mode). When a claimant publishes a proof whose SHA-256 matches the
-task's `spec_hash`, `submit_proof` records completion; `finalize` then marks the
-job done while the SDK releases the escrow — splitting the bounty across swarm
-members per their recorded shares via `EscrowPaymentRouter.split_release`.
+A poster publishes a task as a **rubric** (a structured set of acceptance
+criteria — see `PROOF_SYSTEM.md`) identified by `rubric_uri` + its SHA-256
+`rubric_hash`, with a bounty locked off-chain into an `Escrow` instance
+(`escrow_contract.py`). Agents either self-`claim_job` (single mode) or
+`join_swarm` with an agreed bounty share (swarm mode).
 
-The escrow holds the funds and enforces the proof + balanced-split invariants on
-release, so this contract stays free of cross-contract calls: it is the
-discovery + coordination ledger, and emits `job_posted` / `job_claimed` /
-`swarm_joined` / `job_completed` events for the off-chain indexer and `/jobs` UI.
+The claimant does the work and publishes an **evidence bundle** — the real
+deliverable, not the spec echoed back — via `submit_evidence`, anchoring its
+`evidence_root` on-chain. A `judge` (fixed per job) evaluates the bundle against
+the rubric off-chain and records the outcome with `record_verdict`. On a pass the
+SDK has the judge release the escrow (single payout or N-way swarm split). The
+poster closes the record with `finalize`.
+
+This is the validity layer that replaces the old `SHA256(proof) == spec_hash`
+gate: that only proved a claimant could echo the agreed bytes, never that the
+work met the rubric. Now release follows a judge's verdict.
+
+The escrow holds the funds and enforces judge-authorized + balanced release, so
+this contract stays free of cross-contract calls: it is the discovery +
+coordination ledger, emitting `job_posted` / `job_claimed` / `swarm_joined` /
+`job_submitted` / `job_verified` / `job_completed` events for the off-chain
+indexer and `/jobs` UI.
 
 Authored in the Mycelium DSL and compiled with this repo's own compiler:
 
@@ -36,6 +46,8 @@ class ContractError:
     NOT_SUBMITTED = 5
     BAD_SHARE = 6
     NOT_CLAIMANT = 7
+    NOT_JUDGE = 8
+    NOT_VERIFIED = 9
 
 
 @contract
@@ -48,18 +60,28 @@ class JobBoard:
     def post_job(
         self,
         poster: Address,
-        spec_uri: Bytes,
-        spec_hash: Bytes,
+        title: Bytes,
+        description: Bytes,
+        spec: Bytes,
+        rubric_hash: Bytes,
         bounty: I128,
         token: Address,
         mode: Symbol,
         escrow: Address,
+        judge: Address,
         deadline: U64,
     ) -> U64:
         """
-        Record a new job and return its id. The bounty is expected to already be
-        locked in the `escrow` instance (the SDK deploys + locks it first). `mode`
-        is the symbol `single` or `swarm`.
+        Record a new job and return its id. The job is self-describing on-chain:
+        `title` (heading), `description`, and `spec` (the full acceptance rubric
+        JSON — checks + their weights + the chosen judge panel) are stored so
+        anyone can read the bounty's details straight from this contract via
+        `get_job`, with no off-chain dependency. `rubric_hash` is the SHA-256 of
+        `spec` for integrity.
+
+        The bounty is expected to already be locked in the `escrow` instance (the
+        SDK deploys + locks it first, naming the same `judge` as the release
+        authority). `mode` is the symbol `single` or `swarm`.
         """
         poster.require_auth()
 
@@ -68,12 +90,15 @@ class JobBoard:
 
         jid = str(job_id)
         self.storage.set("poster:" + jid, poster)
-        self.storage.set("spec_uri:" + jid, spec_uri)
-        self.storage.set("spec_hash:" + jid, spec_hash)
+        self.storage.set("title:" + jid, title)
+        self.storage.set("description:" + jid, description)
+        self.storage.set("spec:" + jid, spec)
+        self.storage.set("rubric_hash:" + jid, rubric_hash)
         self.storage.set("bounty:" + jid, bounty)
         self.storage.set("token:" + jid, token)
         self.storage.set("mode:" + jid, mode)
         self.storage.set("escrow:" + jid, escrow)
+        self.storage.set("judge:" + jid, judge)
         self.storage.set("deadline:" + jid, deadline)
         self.storage.set("status:" + jid, Symbol("open"))
 
@@ -132,14 +157,20 @@ class JobBoard:
         return True
 
     @external
-    def submit_proof(self, submitter: Address, job_id: U64, proof: Bytes) -> Bool:
+    def submit_evidence(self, submitter: Address, job_id: U64, evidence_root: Bytes, evidence_uri: Bytes) -> Bool:
         """
-        Record a completion proof whose SHA-256 matches the job's spec_hash.
+        Anchor the claimant's evidence on-chain: `evidence_root` is the 32-byte
+        commitment to the off-chain bundle (the real deliverable + per-check
+        claims + provenance), and `evidence_uri` is the pointer to where that
+        bundle can be fetched and verified against the root. The bulk deliverable
+        stays off-chain (cheap), but its commitment and locator are on-chain, so
+        the proof is publicly discoverable and tamper-evident — not a bare hash
+        with no way to find what it commits to.
 
-        Only the recorded claimant may submit: the single-mode `agent:` or a
-        swarm `members:` entry. The proof must stay secret until this call —
-        publishing it on-chain is what authorizes escrow release, so an
-        unauthorized submitter must never be able to record it.
+        Unlike the old `submit_proof`, there is NO hash-check against the rubric —
+        the rubric is satisfied by a judge's verdict, not by echoing bytes.
+        Recording evidence opens the verification round. Only the recorded
+        claimant may submit: the single-mode `agent:` or a swarm `members:` entry.
         """
         submitter.require_auth()
         jid = str(job_id)
@@ -159,25 +190,55 @@ class JobBoard:
             if agent != submitter:
                 raise ContractError.NOT_CLAIMANT
 
-        if self.env.crypto().sha256(proof) != self.storage.get("spec_hash:" + jid):
-            raise ContractError.INVALID_PROOF
-        self.storage.set("proof:" + jid, proof)
+        self.storage.set("evidence_root:" + jid, evidence_root)
+        self.storage.set("evidence_uri:" + jid, evidence_uri)
         self.storage.set("status:" + jid, Symbol("submitted"))
         self.env.emit_event("job_submitted", {"job_id": job_id})
         return True
 
     @external
+    def record_verdict(self, judge: Address, job_id: U64, passed: Bool, score: U32, evidence_root: Bytes) -> Bool:
+        """
+        Record the judge panel's verdict on-chain: the pass/fail AND the numeric
+        `score` (0..100, the panel's weighted aggregate) so the judgment is itself
+        auditable and can feed agent reputation. Only the `judge` fixed at post
+        time may call this, and only once evidence has been submitted. On a pass
+        the job moves to `verified` and the SDK has the judge release the escrow;
+        on a fail it moves to `rejected` and the depositor can refund after the
+        deadline. `evidence_root` must match the anchored submission, so a verdict
+        can never be recorded against a different bundle.
+        """
+        judge.require_auth()
+        jid = str(job_id)
+        if judge != self.storage.get("judge:" + jid):
+            raise ContractError.NOT_JUDGE
+        if self.storage.get("status:" + jid, Symbol("none")) != Symbol("submitted"):
+            raise ContractError.NOT_SUBMITTED
+        if evidence_root != self.storage.get("evidence_root:" + jid):
+            raise ContractError.INVALID_PROOF
+
+        self.storage.set("score:" + jid, score)
+        if passed:
+            self.storage.set("status:" + jid, Symbol("verified"))
+            self.env.emit_event("job_verified", {"job_id": job_id, "passed": passed, "score": score})
+        else:
+            self.storage.set("status:" + jid, Symbol("rejected"))
+            self.env.emit_event("job_verified", {"job_id": job_id, "passed": passed, "score": score})
+        return True
+
+    @external
     def finalize(self, job_id: U64) -> Bool:
         """
-        Mark a submitted job complete. The SDK releases the escrow (single payout
-        or N-way swarm split) around this call. Reverts unless a proof was
-        submitted. Only the poster (who locked the bounty) may release.
+        Mark a verified job complete. The SDK releases the escrow (judge-signed,
+        single payout or N-way swarm split) when the verdict is recorded; this is
+        the poster closing the record. Reverts unless the job was verified. Only
+        the poster may call.
         """
         jid = str(job_id)
         poster = self.storage.get("poster:" + jid)
         poster.require_auth()
-        if self.storage.get("status:" + jid, Symbol("none")) != Symbol("submitted"):
-            raise ContractError.NOT_SUBMITTED
+        if self.storage.get("status:" + jid, Symbol("none")) != Symbol("verified"):
+            raise ContractError.NOT_VERIFIED
         self.storage.set("status:" + jid, Symbol("done"))
         self.env.emit_event("job_completed", {"job_id": job_id})
         return True
@@ -196,15 +257,28 @@ class JobBoard:
 
     @view
     def get_job(self, job_id: U64) -> Map:
-        """Return a job's current state for off-chain inspection."""
+        """
+        Return a job's full state — including its on-chain `title`, `description`,
+        and `spec` (the rubric: checks + judge panel) — so a caller can render the
+        bounty straight from the contract address with no indexer or off-chain
+        fetch required.
+        """
         jid = str(job_id)
         poster = self.storage.get("poster:" + jid)
         details = Map()
         details.set(Symbol("poster"), poster)
+        details.set(Symbol("title"), self.storage.get("title:" + jid, Bytes(b"")))
+        details.set(Symbol("description"), self.storage.get("description:" + jid, Bytes(b"")))
+        details.set(Symbol("spec"), self.storage.get("spec:" + jid, Bytes(b"")))
+        details.set(Symbol("rubric_hash"), self.storage.get("rubric_hash:" + jid, Bytes(b"")))
+        details.set(Symbol("evidence_root"), self.storage.get("evidence_root:" + jid, Bytes(b"")))
+        details.set(Symbol("evidence_uri"), self.storage.get("evidence_uri:" + jid, Bytes(b"")))
+        details.set(Symbol("score"), self.storage.get("score:" + jid, U32(0)))
         details.set(Symbol("bounty"), self.storage.get("bounty:" + jid))
         details.set(Symbol("token"), self.storage.get("token:" + jid))
         details.set(Symbol("mode"), self.storage.get("mode:" + jid))
         details.set(Symbol("escrow"), self.storage.get("escrow:" + jid))
+        details.set(Symbol("judge"), self.storage.get("judge:" + jid, poster))
         details.set(Symbol("deadline"), self.storage.get("deadline:" + jid))
         details.set(Symbol("status"), self.storage.get("status:" + jid))
         # Defaults to the poster when unclaimed, so the SDK always reads an address.
