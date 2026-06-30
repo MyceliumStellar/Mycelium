@@ -69,3 +69,8 @@ compiler/mycelium_compiler/bin/
 scratch/
 scratchbook/
 
+# Presentation and business documents
+pitch/
+vision/
+
+
