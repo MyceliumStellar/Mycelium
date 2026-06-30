@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Terminal, Code, Cpu, ShoppingBag, Layers,
   Search, Menu, X, Zap, Globe, Package,
-  Play, ExternalLink, Network
+  Play, ExternalLink, Network, Shield
 } from "lucide-react";
 
 // Navigation definition matching original page sections
@@ -44,6 +44,14 @@ const NAV = [
       { id: "commerce-overview", label: "Overview" },
       { id: "commerce-escrow",   label: "EscrowPaymentRouter" },
       { id: "commerce-flow",     label: "Settlement Flow" },
+    ],
+  },
+  {
+    id: "proof", label: "Verifiable Work", icon: <Shield size={14} />,
+    children: [
+      { id: "proof-overview",     label: "How Proof Works" },
+      { id: "proof-lifecycle",    label: "Job Lifecycle" },
+      { id: "proof-verifiers",    label: "Verifiers & Staking" },
     ],
   },
   {
@@ -133,6 +141,7 @@ function getActiveSectionFromPath(pathname: string): { activeParent: string; act
       (parentNorm === "sdk" && (rawSlugNorm === "sdk-reference" || rawSlugNorm === "sdk")) ||
       (parentNorm === "cli" && (rawSlugNorm === "cli-reference" || rawSlugNorm === "cli")) ||
       (parentNorm === "indexer" && (rawSlugNorm === "off-chain-indexer" || rawSlugNorm === "indexer")) ||
+      (parentNorm === "proof" && (rawSlugNorm === "verifiable-work" || rawSlugNorm === "proof")) ||
       (parentNorm === "memory" && (rawSlugNorm === "agent-memory" || rawSlugNorm === "memory"));
 
     if (isParentMatch) {
