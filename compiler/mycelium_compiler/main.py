@@ -7,7 +7,7 @@ from mycelium_compiler.codegen import generate_wasm
 
 def compile_file(source_path: str, output_path: str):
     print(f"Compiling {source_path} to {output_path}...")
-    with open(source_path, "r") as f:
+    with open(source_path, "r", encoding="utf-8") as f:
         source_code = f.read()
     
     visitor = parse_source(source_code)

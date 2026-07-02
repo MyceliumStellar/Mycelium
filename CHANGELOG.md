@@ -6,6 +6,16 @@ are documented here. The four components are versioned together.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2026-07-02
+
+### CLI & SDK
+- **Windows OS Encoding Compatibility:** Configured text-mode file read/write operations (like CLI templates, dotenv loading, wallet storage, and AST checking) to explicitly use `encoding="utf-8"`, preventing `UnicodeEncodeError` when files contain emojis or smart quotes on Windows systems.
+- **Path Normalization:** Replaced hardcoded Unix temp paths (`/tmp/...`) with `tempfile.gettempdir()` to support multi-OS execution.
+- **Docker Mount Paths:** Normalizes sandbox volume mount paths on Windows hosts by replacing backslashes with forward slashes.
+- **Stellar CLI Windows ARM64 Support:** Configured the Stellar CLI bootstrapper to dynamically resolve and retrieve the `x86_64` build on all Windows platforms (including ARM64 snapped machines) so built-in emulation can run the binary.
+- **Platform-Specific Doctor Diagnostics:** Updated the doctor command to output Windows-specific Rust toolchain download recommendations.
+- **Log Correction:** Fixed bad-sequence retry loop count logs to report `8` attempts instead of `5`.
+
 ## [0.4.0] — 2026-06-30
 
 The **proof-of-work** release. Mycelium gains a real **verifiable-work layer**: a

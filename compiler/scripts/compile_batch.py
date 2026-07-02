@@ -32,7 +32,7 @@ def find_contracts(input_dir):
 def compile_one(src_path):
     """Return (wasm_bytes, None) on success or (None, error_str) on failure."""
     try:
-        with open(src_path) as f:
+        with open(src_path, encoding="utf-8") as f:
             source = f.read()
         visitor = parse_source(source)
         validate_ast(visitor)

@@ -227,7 +227,7 @@ def judge_job(
     from mycelium_sdk.proof.evidence import EvidenceBundle, Artifact, Claim
 
     client = _client(network, wallet, board, signing=True)
-    text = open(deliverable).read() if os.path.isfile(deliverable) else deliverable
+    text = open(deliverable, encoding="utf-8").read() if os.path.isfile(deliverable) else deliverable
     job = client.get_job(job_id)
     # Rebuild the bundle the agent anchored is not needed for scoring text; the
     # on-chain evidence_root is what the verdict binds to.

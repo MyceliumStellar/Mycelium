@@ -251,7 +251,7 @@ def ensure_stellar_cli() -> str:
 
     version = "27.0.0"
 
-    if "windows" in system and ("86" in machine or "amd64" in machine):
+    if "windows" in system:
         filename = f"stellar-cli-{version}-x86_64-pc-windows-msvc.tar.gz"
     elif "linux" in system and "86" in machine:
         filename = f"stellar-cli-{version}-x86_64-unknown-linux-gnu.tar.gz"
@@ -337,10 +337,10 @@ panic = "abort"
 """
 
     try:
-        with open(os.path.join(temp_dir, "Cargo.toml"), "w") as f:
+        with open(os.path.join(temp_dir, "Cargo.toml"), "w", encoding="utf-8") as f:
             f.write(cargo_toml)
 
-        with open(os.path.join(temp_dir, "src", "lib.rs"), "w") as f:
+        with open(os.path.join(temp_dir, "src", "lib.rs"), "w", encoding="utf-8") as f:
             f.write(rust_code)
 
         stellar_bin = ensure_stellar_cli()
@@ -351,7 +351,7 @@ panic = "abort"
         if os.path.exists(cache_dir):
             target_dir = cache_dir
         else:
-            target_dir = "/tmp/mycelium_cargo_target"
+            target_dir = os.path.join(tempfile.gettempdir(), "mycelium_cargo_target")
             os.makedirs(target_dir, exist_ok=True)
 
         env = os.environ.copy()

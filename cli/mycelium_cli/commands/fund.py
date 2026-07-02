@@ -27,7 +27,7 @@ def _wallet_public_key(wallet_path: str) -> Optional[str]:
     """Read the wallet's plaintext public key (no passphrase needed)."""
     if not os.path.exists(wallet_path):
         return None
-    with open(wallet_path, "r") as f:
+    with open(wallet_path, "r", encoding="utf-8") as f:
         return json.load(f).get("public_key")
 
 

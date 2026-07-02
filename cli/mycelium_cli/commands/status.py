@@ -24,7 +24,7 @@ def _wallet_public_key(wallet_path: str) -> Optional[str]:
     if not os.path.exists(wallet_path):
         return None
     try:
-        with open(wallet_path, "r") as f:
+        with open(wallet_path, "r", encoding="utf-8") as f:
             return json.load(f).get("public_key")
     except (OSError, json.JSONDecodeError):
         return None

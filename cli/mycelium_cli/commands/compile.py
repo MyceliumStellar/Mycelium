@@ -94,7 +94,7 @@ def run_compile(
         print(f"Error: File {file_path} not found.")
         sys.exit(1)
 
-    with open(file_path, "r") as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         source_code = f.read()
 
     # Decide the path. Explicit flags win; otherwise auto-detect.

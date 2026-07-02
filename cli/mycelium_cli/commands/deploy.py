@@ -29,7 +29,7 @@ def _load_secret(wallet_path: str, passphrase: str | None) -> tuple[str, str]:
     """Decrypt the wallet, returning (secret_seed, public_key)."""
     import json
 
-    with open(wallet_path, "r") as f:
+    with open(wallet_path, "r", encoding="utf-8") as f:
         wallet = json.load(f)
     pw = crypto.resolve_passphrase(passphrase)
     secret = crypto.decrypt_secret(

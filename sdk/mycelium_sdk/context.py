@@ -151,7 +151,7 @@ class AgentContext:
         stellar_sdk = _require_stellar_sdk()
         from stellar_sdk import Keypair
 
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             wallet_data = json.load(f)
         decrypted_seed = self._decrypt_aes_gcm(
             wallet_data["encrypted_secret"],
@@ -340,7 +340,7 @@ class AgentContext:
                     delay = min(15.0, 1.5 * (2 ** (bad_seq_attempts - 1)))
                     log.warning(
                         f"{function_name}: {bad_seq}; reloading account and "
-                        f"rebuilding {bad_seq_attempts}/5 in {delay:.1f}s"
+                        f"rebuilding {bad_seq_attempts}/8 in {delay:.1f}s"
                     )
                     time.sleep(delay)
                     tx = _build_tx()

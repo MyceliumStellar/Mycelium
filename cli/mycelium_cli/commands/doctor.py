@@ -68,7 +68,10 @@ def _check_rust() -> None:
     rustc = _run(["rustc", "--version"])
     if not rustc:
         print(f"  {_WARN} rust          not installed (optional — only for `compile --local`)")
-        print("       install: curl https://sh.rustup.rs -sSf | sh")
+        if sys.platform == "win32":
+            print("       install: Download and run rustup-init.exe from https://rustup.rs/")
+        else:
+            print("       install: curl https://sh.rustup.rs -sSf | sh")
         return
     print(f"  {_OK} rust          {rustc}")
 

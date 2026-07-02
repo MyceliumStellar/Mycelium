@@ -16,10 +16,11 @@ def compile_in_docker_sandbox(source_code: str) -> dict:
         with open(source_file_path, "w", encoding="utf-8") as f:
             f.write(source_code)
             
+        host_path = os.path.abspath(tmpdir).replace(os.sep, "/")
         # Command to run docker container
         cmd = [
             "docker", "run", "--rm",
-            "-v", f"{os.path.abspath(tmpdir)}:/workspace",
+            "-v", f"{host_path}:/workspace",
             "--network", "none",            # Sandbox: disable network access
             "--memory", "512m",             # Quota: limit RAM
             "--cpus", "1.0",                # Quota: limit CPU allocation

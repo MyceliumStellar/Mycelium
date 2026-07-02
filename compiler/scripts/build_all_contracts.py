@@ -17,8 +17,8 @@ def main():
     files = sorted([f for f in os.listdir(contracts_dir) if f.endswith(".py")])
     print(f"Found {len(files)} smart contracts in {contracts_dir}.")
     
-    # Create temp directory for output WASMs
-    out_dir = "/tmp/mycelium_builds"
+    import tempfile
+    out_dir = os.path.join(tempfile.gettempdir(), "mycelium_builds")
     if os.path.exists(out_dir):
         shutil.rmtree(out_dir)
     os.makedirs(out_dir, exist_ok=True)

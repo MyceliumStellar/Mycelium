@@ -472,6 +472,7 @@ export default function DocsContent({ slug: rawSlug }: { slug: string }) {
       { id: "proof-verifiers", label: "Verifiers & Staking" }
     ],
     "changelog": [
+      { id: "v041", label: "0.4.1" },
       { id: "v040", label: "0.4.0" },
       { id: "v030", label: "0.3.0" },
       { id: "v020", label: "0.2.0" },
@@ -2316,6 +2317,22 @@ mycelium agent reputation --address GABCDEF123...`}
             <P>
               All notable changes to the Mycelium framework (SDK, CLI, compiler, and Web IDE) are documented here.
             </P>
+
+            <SectionH2 id="v041">Version 0.4.1 — Multi-OS Compatibility & Hardening Release</SectionH2>
+            <P><strong>Released on 2026-07-02</strong></P>
+            <P>
+              This patch release resolves critical bugs, OS incompatibilities, and logical gaps across the SDK, CLI, compiler, and IDE backend to improve developer onboarding on Windows and non-x86_64 host architectures. <InlineCode>mycelium-sdk</InlineCode>, <InlineCode>mycelium-cli</InlineCode>, <InlineCode>mycelium-compiler</InlineCode>, and the <InlineCode>mycelium-stellar</InlineCode> metapackage all move to <InlineCode>0.4.1</InlineCode>.
+            </P>
+
+            <SectionH3>Bug Fixes & Incompatibility Updates</SectionH3>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>Windows OS Encoding Fixes:</strong> Configured all text-mode file read/write operations (such as CLI scaffold templates, dotenv loading, wallet storage, and AST checking) to explicitly use <InlineCode>encoding=&quot;utf-8&quot;</InlineCode>, preventing <InlineCode>UnicodeEncodeError</InlineCode> when files contain emojis or smart quotes on Windows default ANSI code pages (CP1252).</li>
+              <li><strong>Temporary Directory Normalization:</strong> Replaced hardcoded Unix temp paths (<InlineCode>/tmp/...</InlineCode>) in the compiler and contract building scripts with <InlineCode>tempfile.gettempdir()</InlineCode> to prevent path resolution and permission failures on non-POSIX OSs.</li>
+              <li><strong>Docker Mount Path Normalization:</strong> Normalizes volume mount directories under Windows host environments (converting backslashes to forward slashes) inside the sandbox Docker runner for compile operations.</li>
+              <li><strong>Windows ARM64 Emulation Support:</strong> Configured the Stellar CLI bootstrapper to automatically fetch the <InlineCode>x86_64</InlineCode> build when running on Windows (including ARM64 snapped laptops), letting Windows built-in translation layers run the binary rather than throwing architecture mismatch errors.</li>
+              <li><strong>Platform-Specific Doctor Outputs:</strong> Updated the CLI command <InlineCode>mycelium doctor</InlineCode> to detect Windows target OSs and output platform-appropriate Rust/toolchain installer download recommendations instead of Unix shell pipeline prompts.</li>
+              <li><strong>Logging Hardening:</strong> Resolved a retry logging mismatch in the contract client&apos;s sequence recovery loop, raising retries to 8 and aligning log metrics.</li>
+            </ul>
 
             <SectionH2 id="v040">Version 0.4.0 — The Verifiable Agent Work Release</SectionH2>
             <P><strong>Released on 2026-06-30</strong></P>

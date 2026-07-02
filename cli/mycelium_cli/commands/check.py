@@ -9,7 +9,7 @@ def run_check(file_path: str):
         print(f"Error: File {file_path} not found.")
         sys.exit(1)
         
-    with open(file_path, "r") as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         source_code = f.read()
         
     try:

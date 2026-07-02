@@ -53,17 +53,17 @@ def run_init(
 
     with open(os.path.join(project_name, "mycelium.toml"), "wb") as f:
         tomli_w.dump(build_config(project_name, framework, model, unique_name), f)
-    with open(os.path.join(project_name, "contract.py"), "w") as f:
+    with open(os.path.join(project_name, "contract.py"), "w", encoding="utf-8") as f:
         f.write(CONTRACT_TEMPLATE)
-    with open(os.path.join(project_name, "agent.py"), "w") as f:
+    with open(os.path.join(project_name, "agent.py"), "w", encoding="utf-8") as f:
         f.write(agent_template(framework, model, unique_name))
-    with open(os.path.join(project_name, ".gitignore"), "w") as f:
+    with open(os.path.join(project_name, ".gitignore"), "w", encoding="utf-8") as f:
         f.write(GITIGNORE)
 
     if api_key:
         env_var = _API_KEY_ENV.get(framework, "API_KEY")
         env_path = os.path.join(project_name, ".env")
-        with open(env_path, "w") as f:
+        with open(env_path, "w", encoding="utf-8") as f:
             f.write(f"{env_var}={api_key}\n")
         try:
             os.chmod(env_path, 0o600)
