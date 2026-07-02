@@ -27,10 +27,13 @@ from mycelium_cli.config import get_value
 # Must track compiler/.../core.py::ensure_stellar_cli (the version we bundle).
 PINNED_STELLAR_VERSION = "27.0.0"
 WASM_TARGET = "wasm32-unknown-unknown"
+from rich.console import Console
 
-_OK = "✓"
-_NO = "✗"
-_WARN = "⚠"
+console = Console()
+
+_OK = "[bold green]✓[/bold green]"
+_NO = "[bold red]✗[/bold red]"
+_WARN = "[bold yellow]⚠[/bold yellow]"
 
 
 def _run(cmd: list[str]) -> Optional[str]:
@@ -48,8 +51,8 @@ def _check_stellar_cli() -> None:
     """Optional: report local stellar-cli (only needed for `compile --local`)."""
     binary = shutil.which("stellar")
     if not binary:
-        print(f"  {_WARN} stellar-cli   not installed (optional — only for `compile --local`)")
-        print(f"       install: cargo install --locked stellar-cli@{PINNED_STELLAR_VERSION}")
+        console.print(f"  {_WARN} stellar-cli   not installed [dim](optional — only for `compile --local`)[/dim]")
+        console.print(f"       [yellow]install:[/yellow] cargo install --locked stellar-cli@{PINNED_STELLAR_VERSION}")
         return
     out = _run(["stellar", "--version"]) or ""
     m = re.search(r"(\d+)\.(\d+)\.(\d+)", out)
@@ -57,30 +60,30 @@ def _check_stellar_cli() -> None:
     major = int(m.group(1)) if m else 0
     pinned_major = int(PINNED_STELLAR_VERSION.split(".")[0])
     if major == pinned_major:
-        print(f"  {_OK} stellar-cli   {version} ({binary}) — local compile available")
+        console.print(f"  {_OK} stellar-cli   [green]{version}[/green] ({binary}) — [bold green]local compile available[/bold green]")
     else:
-        print(f"  {_WARN} stellar-cli   {version} — Mycelium pins v{PINNED_STELLAR_VERSION} for local compile")
-        print(f"       fix: cargo install --locked stellar-cli@{PINNED_STELLAR_VERSION}")
+        console.print(f"  {_WARN} stellar-cli   [yellow]{version}[/yellow] — Mycelium pins v{PINNED_STELLAR_VERSION} for local compile")
+        console.print(f"       [yellow]fix:[/yellow] cargo install --locked stellar-cli@{PINNED_STELLAR_VERSION}")
 
 
 def _check_rust() -> None:
     """Optional: report local Rust + wasm32 target (only for `compile --local`)."""
     rustc = _run(["rustc", "--version"])
     if not rustc:
-        print(f"  {_WARN} rust          not installed (optional — only for `compile --local`)")
+        console.print(f"  {_WARN} rust          not installed [dim](optional — only for `compile --local`)[/dim]")
         if sys.platform == "win32":
-            print("       install: Download and run rustup-init.exe from https://rustup.rs/")
+            console.print("       [yellow]install:[/yellow] Download and run rustup-init.exe from https://rustup.rs/")
         else:
-            print("       install: curl https://sh.rustup.rs -sSf | sh")
+            console.print("       [yellow]install:[/yellow] curl https://sh.rustup.rs -sSf | sh")
         return
-    print(f"  {_OK} rust          {rustc}")
+    console.print(f"  {_OK} rust          [green]{rustc}[/green]")
 
     installed = _run(["rustup", "target", "list", "--installed"]) or ""
     if WASM_TARGET in installed:
-        print(f"  {_OK} wasm target   {WASM_TARGET} installed — local compile available")
+        console.print(f"  {_OK} wasm target   [green]{WASM_TARGET}[/green] installed — [bold green]local compile available[/bold green]")
     else:
-        print(f"  {_WARN} wasm target   {WASM_TARGET} missing (optional)")
-        print(f"       fix: rustup target add {WASM_TARGET}")
+        console.print(f"  {_WARN} wasm target   [yellow]{WASM_TARGET}[/yellow] missing (optional)")
+        console.print(f"       [yellow]fix:[/yellow] rustup target add {WASM_TARGET}")
 
 
 def _check_compile_endpoint() -> bool:
@@ -92,12 +95,12 @@ def _check_compile_endpoint() -> bool:
     base = COMPILE_URL.rsplit("/compile", 1)[0] or COMPILE_URL
     try:
         requests.get(base, timeout=15)
-        print(f"  {_OK} compile       hosted endpoint reachable ({COMPILE_URL})")
+        console.print(f"  {_OK} compile       hosted endpoint [green]reachable[/green] ({COMPILE_URL})")
         return True
     except Exception as e:
-        print(f"  {_NO} compile       hosted endpoint unreachable: {e}")
-        print(f"       fix: check connectivity to {COMPILE_URL}, set MYCELIUM_COMPILE_URL, "
-              f"or install a local toolchain and use `compile --local`")
+        console.print(f"  {_NO} compile       hosted endpoint [bold red]unreachable[/bold red]: {e}")
+        console.print(f"       [yellow]fix:[/yellow] check connectivity to {COMPILE_URL}, set MYCELIUM_COMPILE_URL, "
+                      f"or install a local toolchain and use `compile --local`")
         return False
 
 
@@ -107,29 +110,32 @@ def _check_rpc(network: str) -> bool:
         from stellar_sdk import SorobanServer
 
         seq = SorobanServer(url).get_latest_ledger().sequence
-        print(f"  {_OK} rpc           {network} reachable (ledger {seq})")
+        console.print(f"  {_OK} rpc           [cyan]{network}[/cyan] [green]reachable[/green] (ledger {seq})")
         return True
     except Exception as e:
-        print(f"  {_NO} rpc           {network} unreachable: {e}")
-        print(f"       fix: check connectivity to {url}")
+        console.print(f"  {_NO} rpc           [cyan]{network}[/cyan] [bold red]unreachable[/bold red]: {e}")
+        console.print(f"       [yellow]fix:[/yellow] check connectivity to {url}")
         return False
 
 
 def run_doctor(network: Optional[str] = None) -> bool:
     network = normalize_network(network or get_value("onchain", "network", "testnet"))
-    print("\nMycelium doctor — connectivity check\n")
+    console.print("\n[bold green]Mycelium Doctor[/bold green] — connectivity check\n")
 
     # Required checks gate the exit code; optional ones are informational only.
     required = [
         _check_compile_endpoint(),
         _check_rpc(network),
     ]
-    print("\n  optional — local compile (not needed for the default workflow):")
+    console.print("\n  [bold cyan]optional[/bold cyan] — local compile (not needed for the default workflow):")
     _check_stellar_cli()
     _check_rust()
 
     ok = all(required)
-    print(f"\n{'✓ All required checks passed.' if ok else '✗ Some required checks failed — see fixes above.'}\n")
+    if ok:
+        console.print(f"\n[bold green]✓ All required checks passed.[/bold green]\n")
+    else:
+        console.print(f"\n[bold red]✗ Some required checks failed — see fixes above.[/bold red]\n")
     if not ok:
         sys.exit(1)
     return ok

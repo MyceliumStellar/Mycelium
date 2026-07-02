@@ -74,36 +74,85 @@ def run_status(
     balance = _safe_balance(network, public_key) if public_key else None
     entry = _registry_entry(network, registry, unique_name) if unique_name else None
 
-    print(f"\nMycelium status — project '{project}' ({framework})\n")
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+
+    console = Console()
+
+    table = Table(show_header=False, box=None, padding=(0, 2))
 
     # Wallet + funding.
     if public_key:
-        bal_str = f"{balance} XLM" if balance is not None else "unknown (RPC unreachable)"
+        bal_str = f"[bold green]{balance} XLM[/bold green]" if balance is not None else "[dim]unknown (RPC unreachable)[/dim]"
         funded = balance is not None and balance > 0
-        print(f"  {_OK} wallet      {public_key}")
-        print(f"  {_OK if funded else _NO} balance     {bal_str}")
+        table.add_row(
+            "[bold green]✓[/bold green] [bold]wallet[/bold]",
+            f"[cyan]{public_key}[/cyan]"
+        )
+        table.add_row(
+            "[bold green]✓[/bold green] [bold]balance[/bold]" if funded else "[bold red]✗[/bold red] [bold]balance[/bold]",
+            bal_str
+        )
     else:
-        print(f"  {_NO} wallet      not found — run `mycelium newwallet`")
-        print(f"  {_NO} balance     —")
+        table.add_row(
+            "[bold red]✗[/bold red] [bold]wallet[/bold]",
+            "[bold red]not found[/bold red] — run `mycelium newwallet`"
+        )
+        table.add_row(
+            "[bold red]✗[/bold red] [bold]balance[/bold]",
+            "[dim]—[/dim]"
+        )
 
-    print(f"  •  network     {network}")
+    table.add_row(
+        "  [bold cyan]•[/bold cyan] [bold]network[/bold]",
+        f"[magenta]{network}[/magenta]"
+    )
 
     # Deploy state.
     if contract_id:
-        print(f"  {_OK} contract    {contract_id}")
+        table.add_row(
+            "[bold green]✓[/bold green] [bold]contract[/bold]",
+            f"[cyan]{contract_id}[/cyan]"
+        )
     else:
-        print(f"  {_NO} contract    not deployed — run `mycelium deploy`")
+        table.add_row(
+            "[bold red]✗[/bold red] [bold]contract[/bold]",
+            "[bold red]not deployed[/bold red] — run `mycelium deploy`"
+        )
 
     # Registry registration.
     if not unique_name:
-        print(f"  {_NO} registry    no [agent].unique_name in mycelium.toml")
+        table.add_row(
+            "[bold red]✗[/bold red] [bold]registry[/bold]",
+            "[bold red]no [agent].unique_name in mycelium.toml[/bold red]"
+        )
     elif entry and entry.get("public_key"):
         rep = entry.get("reputation", 0)
-        print(f"  {_OK} registry    '{unique_name}' registered (reputation {rep})")
+        reg_details = f"[bold green]'{unique_name}' registered[/bold green] (reputation {rep})"
         if entry.get("endpoint"):
-            print(f"               endpoint {entry['endpoint']}")
+            reg_details += f"\n[dim]endpoint: {entry['endpoint']}[/dim]"
+        table.add_row(
+            "[bold green]✓[/bold green] [bold]registry[/bold]",
+            reg_details
+        )
     else:
-        print(f"  {_NO} registry    '{unique_name}' not registered — run `mycelium register`")
+        table.add_row(
+            "[bold red]✗[/bold red] [bold]registry[/bold]",
+            f"[bold red]'{unique_name}' not registered[/bold red] — run `mycelium register`"
+        )
+
+    panel = Panel(
+        table,
+        title=f"[bold green]Mycelium Status[/bold green] — [bold cyan]{project}[/bold cyan] ({framework})",
+        title_align="left",
+        border_style="green",
+        padding=(1, 2)
+    )
+
+    console.print()
+    console.print(panel)
 
     # One-line "what next?" nudge.
     if not public_key:
@@ -116,7 +165,19 @@ def run_status(
         nxt = "mycelium register"
     else:
         nxt = None
-    print(f"\n  Next: {nxt}\n" if nxt else "\n  Everything is set up. 🍄\n")
+
+    if nxt:
+        next_panel = Panel(
+            Text(nxt, style="bold yellow"),
+            title="[bold yellow]Next Step[/bold yellow]",
+            title_align="left",
+            border_style="yellow",
+            expand=False
+        )
+        console.print(next_panel)
+        console.print()
+    else:
+        console.print("\n  [bold green]Everything is set up. 🍄[/bold green]\n")
 
     return {
         "public_key": public_key,

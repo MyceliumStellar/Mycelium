@@ -6,6 +6,15 @@ are documented here. The four components are versioned together.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] — 2026-07-02
+
+### CLI & SDK
+- **Dynamic CLI ASCII Banner Scaling**: Configured the CLI startup banner to check the terminal window width and automatically scale between the original 67-column block logo, a new 50-column compact ASCII logo, or a text-based fallback to prevent mangling or line-wrapping on narrow panels.
+- **Windows Console Width Detection**: Implemented Win32 console API calls via `ctypes` on Windows platforms to detect the actual visible conhost window size rather than the scrollable screen buffer size.
+- **Windows conhost ANSI Processing**: Automatically enables and verifies Windows Virtual Terminal Processing to prevent printing raw escape codes (like `←[92m` and `←[0m`) on Windows command prompts.
+- **Table Column Truncation & Formatting**: Upgraded `mycelium agents` to use a `rich.table.Table` with auto-wrapping, and conditionally truncates 56-character Ed25519 addresses to 19 characters (`GCBFVJZF...5OOLTZHQ`) when the terminal window is narrower than 120 columns.
+- **Rich Dashboard Diagnostics**: Upgraded the `mycelium status` and `mycelium doctor` commands to render diagnostics in styled Rich Panels and Tables for modern, color-coded console output.
+
 ## [0.4.1] — 2026-07-02
 
 ### CLI & SDK

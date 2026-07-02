@@ -95,3 +95,41 @@ def test_config_round_trip(tmp_path):
 
 def test_get_value_missing_file_returns_default():
     assert config.get_value("x", "y", default="d", path="/no/such/mycelium.toml") == "d"
+
+
+def test_print_agents_truncates_addresses_on_narrow_screens(capsys):
+    from mycelium_cli.commands.discover import _print_agents
+    from unittest.mock import patch
+
+    agents = [
+        {
+            "name": "ultra",
+            "public_key": "GCBFVJZFAZEKGJE6BTUZBI2SVPOUUKORNHV7E6XNTPZ5RJIY5OOLTZHQ",
+            "reputation": 0,
+            "endpoint": "https://ultra.agents.mycelium.sh/api/v1",
+        }
+    ]
+    with patch("mycelium_sdk.banner.get_terminal_columns", return_value=60):
+        _print_agents(agents)
+        captured = capsys.readouterr().out
+        assert "GCBFVJZF...5OOLTZHQ" in captured
+        assert "GCBFVJZFAZEKGJE6BTUZBI2SVPOUUKORNHV7E6XNTPZ5RJIY5OOLTZHQ" not in captured
+
+
+def test_print_agents_keeps_full_addresses_on_wide_screens(capsys):
+    from mycelium_cli.commands.discover import _print_agents
+    from unittest.mock import patch
+
+    agents = [
+        {
+            "name": "ultra",
+            "public_key": "GCBFVJZFAZEKGJE6BTUZBI2SVPOUUKORNHV7E6XNTPZ5RJIY5OOLTZHQ",
+            "reputation": 0,
+            "endpoint": "https://ultra.agents.mycelium.sh/api/v1",
+        }
+    ]
+    with patch("mycelium_sdk.banner.get_terminal_columns", return_value=125):
+        _print_agents(agents)
+        captured = capsys.readouterr().out
+        assert "GCBFVJZFAZEKGJE6BTUZBI2SVPOUUKORNHV7E6XNTPZ5RJIY5OOLTZHQ" in captured
+        assert "GCBFVJZF...5OOLTZHQ" not in captured

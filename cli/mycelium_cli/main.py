@@ -43,7 +43,7 @@ app.add_typer(verifier_app, name="verifier")
 PASSPHRASE_ENV_VAR = "MYCELIUM_DECRYPT_KEY"
 
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 
 
 def _version_callback(value: bool):

@@ -60,17 +60,39 @@ def _print_agents(agents: list) -> None:
         )
         return
 
-    print(f"\nFound {len(agents)} agent(s):\n")
-    name_w = max(len("NAME"), *(len(a.get("name", "")) for a in agents))
-    addr_w = max(len("ADDRESS"), *(len(a.get("public_key") or "") for a in agents))
-    header = f"  {'NAME':<{name_w}}  {'ADDRESS':<{addr_w}}  {'REP':>4}  ENDPOINT"
-    print(header)
-    print("  " + "-" * (len(header) - 2))
+    from mycelium_sdk.banner import get_terminal_columns
+    columns = get_terminal_columns()
+
+    # If the console window is narrower than ~120 characters, truncate the 56-char
+    # public keys (e.g., GCBFVJZF...OLTZHQ) to prevent horizontal line wrapping/clipping.
+    truncate_addr = columns < 120
+
+    from rich.console import Console
+    from rich.table import Table
+
+    console = Console(width=columns)
+
+    table = Table(
+        title=f"[bold green]Hive Registered Agents[/bold green] (found {len(agents)})",
+        title_justify="left",
+        border_style="green",
+        show_lines=False
+    )
+    table.add_column("Name", style="bold cyan", no_wrap=True)
+    table.add_column("Address", style="dim white")
+    table.add_column("Rep", style="magenta", justify="right")
+    table.add_column("Endpoint", style="blue")
+
     for a in agents:
         name = a.get("name", "")
         addr = a.get("public_key") or "—"
+        if truncate_addr and len(addr) == 56:
+            addr = f"{addr[:8]}...{addr[-8:]}"
         rep = a.get("reputation")
         rep_str = str(rep) if rep is not None else "—"
         endpoint = a.get("endpoint") or "—"
-        print(f"  {name:<{name_w}}  {addr:<{addr_w}}  {rep_str:>4}  {endpoint}")
-    print()
+        table.add_row(name, addr, rep_str, endpoint)
+
+    console.print()
+    console.print(table)
+    console.print()

@@ -472,6 +472,7 @@ export default function DocsContent({ slug: rawSlug }: { slug: string }) {
       { id: "proof-verifiers", label: "Verifiers & Staking" }
     ],
     "changelog": [
+      { id: "v042", label: "0.4.2" },
       { id: "v041", label: "0.4.1" },
       { id: "v040", label: "0.4.0" },
       { id: "v030", label: "0.3.0" },
@@ -2317,6 +2318,21 @@ mycelium agent reputation --address GABCDEF123...`}
             <P>
               All notable changes to the Mycelium framework (SDK, CLI, compiler, and Web IDE) are documented here.
             </P>
+
+            <SectionH2 id="v042">Version 0.4.2 — Terminal Visual Upgrades & Windows Formatting Release</SectionH2>
+            <P><strong>Released on 2026-07-02</strong></P>
+            <P>
+              This release focuses on visual polish, terminal auto-scaling, and Windows-specific formatting compatibility across the CLI. <InlineCode>mycelium-sdk</InlineCode>, <InlineCode>mycelium-cli</InlineCode>, <InlineCode>mycelium-compiler</InlineCode>, and the <InlineCode>mycelium-stellar</InlineCode> metapackage all move to <InlineCode>0.4.2</InlineCode>.
+            </P>
+
+            <SectionH3>Visual & Terminal Compatibility Updates</SectionH3>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>Dynamic CLI ASCII Banner Scaling:</strong> Configured the CLI startup banner to query the terminal width and scale between the original 67-column block logo, a new 50-column compact ASCII logo, or a plain text fallback to prevent wrapping.</li>
+              <li><strong>Windows Console Width Detection:</strong> Integrated Win32 console API calls via <InlineCode>ctypes</InlineCode> on Windows to resolve the actual visible window width instead of the scrollable screen buffer size.</li>
+              <li><strong>Windows conhost ANSI Processing:</strong> Enabled and verified Windows Virtual Terminal Processing to prevent printing raw escape codes (such as <InlineCode>\033[92m</InlineCode>) as text on Windows cmd/PowerShell.</li>
+              <li><strong>Table Formatting & Column Truncation:</strong> Upgraded the <InlineCode>mycelium agents</InlineCode> command to output a beautiful Rich Table. To prevent overflow in narrow windows, the 56-character Ed25519 addresses are truncated to 19 characters (<InlineCode>GCBFVJZF...5OOLTZHQ</InlineCode>) when the window is narrower than 120 columns.</li>
+              <li><strong>Rich Status & Doctor Dashboards:</strong> Upgraded the <InlineCode>mycelium status</InlineCode> and <InlineCode>mycelium doctor</InlineCode> CLI commands to utilize Rich Panels, Tables, and colorized checkmarks for clean diagnostic feedback.</li>
+            </ul>
 
             <SectionH2 id="v041">Version 0.4.1 — Multi-OS Compatibility & Hardening Release</SectionH2>
             <P><strong>Released on 2026-07-02</strong></P>
