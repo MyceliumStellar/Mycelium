@@ -176,14 +176,23 @@ export default function BountyBoard() {
             const deadline = Number(raw.get ? raw.get("deadline") : raw.deadline || BigInt(0));
             const status = String(raw.get ? raw.get("status") : raw.status || "open") as Job["status"];
             const agent = raw.get ? raw.get("agent") : raw.agent || "";
-            const specUriRaw = raw.get ? raw.get("spec_uri") : (raw as any).spec_uri || "";
-            
-            let specUriStr = "";
-            if (specUriRaw instanceof Uint8Array) {
-              specUriStr = new TextDecoder().decode(specUriRaw);
-            } else if (typeof specUriRaw === "string") {
-              specUriStr = specUriRaw;
-            }
+            const titleRaw = raw.get ? raw.get("title") : (raw as any).title || "";
+            const descRaw = raw.get ? raw.get("description") : (raw as any).description || "";
+            const specRaw = raw.get ? raw.get("spec") : (raw as any).spec || "";
+
+            const decodeBytes = (val: any): string => {
+              if (val instanceof Uint8Array) {
+                return new TextDecoder().decode(val);
+              }
+              if (typeof val === "string") {
+                return val;
+              }
+              return "";
+            };
+
+            const titleStr = decodeBytes(titleRaw);
+            const descriptionStr = decodeBytes(descRaw);
+            const specStr = decodeBytes(specRaw);
 
             // Fetch swarm members and shares if swarm mode
             let members: string[] = [];
@@ -236,14 +245,23 @@ export default function BountyBoard() {
               }
             }
 
-            // Parse title & description from specUriStr (if available) or generate a detailed ledger-backed metadata description
-            let title = `On-Chain Bounty #${i}`;
-            let description = specUriStr || `Sovereign Job #${i} coordination pipeline. Deployed on Stellar Testnet, locking a bounty of ${Number(bountyStroops) / 10000000} XLM. Payout release requires a valid cryptographic proof submitted to escrow contract ${escrow.slice(0, 10)}...${escrow.slice(-6)}.`;
-            
-            if (specUriStr && specUriStr.includes("|")) {
-              const parts = specUriStr.split("|");
-              title = parts[0];
-              description = parts.slice(1).join("|");
+            // Parse title & description from specStr or use standard description/fallbacks
+            let title = titleStr || `On-Chain Bounty #${i}`;
+            let description = descriptionStr || `Sovereign Job #${i} coordination pipeline. Deployed on Stellar Testnet, locking a bounty of ${Number(bountyStroops) / 10000000} XLM. Payout release requires a valid cryptographic proof submitted to escrow contract ${escrow.slice(0, 10)}...${escrow.slice(-6)}.`;
+
+            try {
+              if (specStr) {
+                const spec = JSON.parse(specStr);
+                const checks = (spec.criteria || [])
+                  .map((c: any) => `${c.id} (${c.weight})`)
+                  .join(", ");
+                const panel = (spec.judges?.models || []).join(", ");
+                if (checks) {
+                  description += `\n\nChecks: ${checks}\nJudge panel: ${panel}\nPass score: ${spec.pass_threshold}`;
+                }
+              }
+            } catch {
+              /* ignore parse errors */
             }
 
             fetchedJobs.push({
@@ -1111,7 +1129,15 @@ export default function BountyBoard() {
                         gap: "6px"
                       }}>
                         <Clock size={14} style={{ color: "rgba(255,255,255,0.5)" }} />
-                        {selectedJob.deadline ? new Date(selectedJob.deadline * 1000).toLocaleString() : "Never"}
+                        {selectedJob.deadline 
+                          ? (selectedJob.deadline > 1000000000 
+                              ? new Date(selectedJob.deadline * 1000).toLocaleString() 
+                              : (selectedJob.deadline >= 86400 
+                                  ? `${(selectedJob.deadline / 86400).toFixed(1).replace(/\.0$/, "")} days` 
+                                  : `${(selectedJob.deadline / 3600).toFixed(1).replace(/\.0$/, "")} hours`
+                                ) + " (from lock/claim)"
+                            )
+                          : "Never"}
                       </span>
                     </div>
                   </div>

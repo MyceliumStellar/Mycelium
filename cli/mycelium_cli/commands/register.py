@@ -48,7 +48,7 @@ def run_register(
         result = hive.register(unique_name, capabilities, endpoint, model=model, role=role, desc=description)
     except Exception as e:
         m = str(e).lower()
-        if "nametaken" in m or ("name" in m and ("taken" in m or "collision" in m or "exists" in m)):
+        if "nametaken" in m or "error(contract, #1)" in m or ("name" in m and ("taken" in m or "collision" in m or "exists" in m)):
             print(f"❌ Registration failed: the name '{unique_name}' is already taken.")
         else:
             print(f"❌ Registration failed: {e}")

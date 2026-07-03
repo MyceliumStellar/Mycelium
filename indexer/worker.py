@@ -280,13 +280,7 @@ def build_default_worker(network: str = "testnet") -> IndexerWorker:
         jobs = JobBoardClient(ctx, board)
 
         def resolve_job(job_id: int) -> Dict[str, Any]:
-            j = jobs.get_job(job_id)
-            return {
-                "token": j.get("token"),
-                "mode": j.get("mode"),
-                "escrow": j.get("escrow"),
-                "deadline": j.get("deadline"),
-            }
+            return jobs.get_job(job_id)
 
     contracts = {
         "registry": HIVEMIND_REGISTRY_ADDRESS,

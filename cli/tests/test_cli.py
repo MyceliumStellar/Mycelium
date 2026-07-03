@@ -133,3 +133,27 @@ def test_print_agents_keeps_full_addresses_on_wide_screens(capsys):
         captured = capsys.readouterr().out
         assert "GCBFVJZFAZEKGJE6BTUZBI2SVPOUUKORNHV7E6XNTPZ5RJIY5OOLTZHQ" in captured
         assert "GCBFVJZF...5OOLTZHQ" not in captured
+
+
+# ── register error handling ──────────────────────────────────────────────────
+def test_register_name_taken(tmp_path, monkeypatch, capsys):
+    from unittest.mock import patch
+    from mycelium_cli.commands.register import run_register
+
+    monkeypatch.chdir(tmp_path)
+    run_init("demo", framework="langgraph", model="gemini-x", unique_name="demo_agent")
+
+    # Generate a dummy wallet so run_register doesn't complain about it missing
+    run_newwallet(path=str(tmp_path / "demo" / ".mycelium" / "wallet.json"), passphrase="pw")
+
+    # cd into demo
+    monkeypatch.chdir(tmp_path / "demo")
+
+    with patch("mycelium_sdk.HiveClient.register", side_effect=RuntimeError("Simulation failed: HostError: Error(Contract, #1)")):
+        with pytest.raises(SystemExit) as excinfo:
+            run_register(passphrase="pw")
+        assert excinfo.value.code == 1
+
+    captured = capsys.readouterr().out
+    assert "❌ Registration failed: the name 'demo_agent' is already taken." in captured
+
