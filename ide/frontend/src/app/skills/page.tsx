@@ -41,9 +41,11 @@ name: agent-skill
 description: Setup Mycelium environment, install SDK/CLI, configure wallets, resolve network congestion, and scaffold autonomous agent loops.
 ---
 
-# Mycelium Agent Skill (v0.4.0)
+# Mycelium Agent Skill (v0.4.3)
 
-This skill guides a code-execution agent (like Claude Code, Antigravity, or other IDE-bound assistants) to setup the Mycelium autonomous agent runtime on Stellar Testnet, resolve developer environmental errors, and program stateless loop integrations.
+This skill guides a code-execution agent (like Claude Code, Antigravity, or other IDE-bound assistants) to setup the Mycelium autonomous agent runtime on Stellar Testnet, resolve developer environmental errors, program stateless loop integrations, and use the Proof Layer Job Board.
+
+---
 
 ## 🛠️ Step-by-Step Installation & Setup
 
@@ -53,21 +55,39 @@ Always isolate python packages to avoid dependency conflicts.
 python3 -m venv venv
 source venv/bin/activate
 \`\`\`
-* Troubleshooting: Ensure Python 3.10+ is installed on the host OS. On Linux/Debian:
-  $ sudo apt-get update && sudo apt-get install -y python3-venv python3-pip
+*Edge Case: \`python3\` command not found.*
+* Troubleshooting: Ensure Python 3.10+ is installed on the host OS. On Linux/Debian: \`sudo apt-get update && sudo apt-get install -y python3-venv python3-pip\`.
 
 ### 2. Installing the Metapackage
 \`\`\`bash
 pip install --upgrade pip
-pip install mycelium-stellar==0.4.0
+pip install mycelium-stellar==0.4.3
 \`\`\`
-* Troubleshooting: Ensure build-essential package compiler is installed. On Debian/Ubuntu:
-  $ sudo apt-get install build-essential python3-dev libssl-dev libffi-dev
+*Edge Case: \`mycelium-stellar\` fails to compile some C extensions (e.g. cryptography).*
+* Troubleshooting: Ensure build-essential package compiler is installed. On Debian/Ubuntu: \`sudo apt-get install build-essential python3-dev libssl-dev libffi-dev\`.
 
 ### 3. CLI Initialization
 \`\`\`bash
 mycelium init
 \`\`\`
+*Note: This creates a default \`mycelium.toml\` in the project root containing network configurations.*
+
+---
+
+## 🌐 Soroban Testnet Contract Addresses
+
+Below are the default contract deployment addresses for Mycelium core modules on the **Stellar Testnet**. Execution agents can read these addresses directly to query state or submit transactions:
+
+| Contract Module | Purpose | Soroban Contract ID |
+|---|---|---|
+| **Hive Registry** | Global registry mapping agent unique names to endpoints & reputation | \`CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC\` |
+| **Job Board** | Sovereign Job Board (P1.5 proof-layer) for posting and claiming bounties | \`CDASJ42STDU42QXDXH3KRFNQWBURB54XPXV2WBXHWGPBA2BNAI5EYULO\` |
+| **Verifier Registry** | Staked judge pool registry verifying accuracy and staking settlements | \`CBFELTFVBRGR5Y4VHOGFUJLNMMRDNBAOTTZUKZ3SNT625GDB4T76OHMC\` |
+| **Reputation Registry** | On-chain reputation store mapping scores and tracking agent performance | \`CCTJCC5FELB4PSXT3OF4QSFKH456OIVHF3YGY7ABNFH7ITL7XWYBO2NE\` |
+| **Memory Anchor** | Compact on-chain commitment anchor for tracking off-chain memory | \`CAC27VKJEPDJJNI36NP7D7VH6WCHT6N5EITKSKPZIQNWA2VPEPBIXJSB\` |
+| **Native XLM SAC** | Stellar Asset Contract (SAC) for native XLM token payments | \`CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC\` |
+
+---
 
 ## 🔑 Wallet Scaffolding & Key Management
 
@@ -77,32 +97,40 @@ Generate a new encrypted keypair:
 mycelium newwallet
 \`\`\`
 You will be prompted to choose a password.
-* Troubleshooting: Set MYCELIUM_PASSPHRASE environment variable before running. The CLI automatically reads this variable to skip interactive prompts:
-  $ export MYCELIUM_PASSPHRASE="your_strong_passphrase_here"
-  $ mycelium newwallet
+*Edge Case: Scripted/automated execution halts at passphrase prompt.*
+* Troubleshooting: Set the \`MYCELIUM_DECRYPT_KEY\` environment variable before running. The CLI automatically reads this variable to skip interactive prompts:
+  \`\`\`bash
+  export MYCELIUM_DECRYPT_KEY="your_strong_passphrase_here"
+  mycelium newwallet
+  \`\`\`
 
 ### 2. Requesting Testnet Funds (Friendbot)
 The wallet needs native XLM to pay for transaction gas fees on Soroban:
 \`\`\`bash
 mycelium fund
 \`\`\`
-* Troubleshooting: If the CLI fails with a connection error or 429 Too Many Requests, fetch your public key address using 'mycelium status' and fund it manually by hitting the Friendbot API directly:
-  $ PUBLIC_KEY=$(mycelium status | grep "Public Key" | awk '{print $NF}')
-  $ curl -X GET "https://friendbot.stellar.org/?addr=\${PUBLIC_KEY}"
+*Edge Case: Friendbot rate limit / connection failure.*
+* Troubleshooting: If the CLI fails with a connection error or \`429 Too Many Requests\`, fetch your public key address using \`mycelium status\` and fund it manually by hitting the Friendbot API directly:
+  \`\`\`bash
+  PUBLIC_KEY=\$(mycelium status | grep "Public Key" | awk '{print \$NF}')
+  curl -X GET "https://friendbot.stellar.org/?addr=\${PUBLIC_KEY}"
+  \`\`\`
+
+---
 
 ## 🤖 Programming the Autonomous Agent Loop
 
-Use this exact programmatic framework to build a Python script (agent_loop.py) that delegates tasks to LLMs (Gemini/Anthropic) while executing on-chain transactions via tool calling:
+Use this exact programmatic framework to build a Python script (\`agent_loop.py\`) that delegates tasks to LLMs (Gemini/Anthropic) while executing on-chain transactions via tool calling:
 
 \`\`\`python
 import os
 import sys
 from mycelium import AgentContext, HiveClient, run_agent_loop, ContractTool
 
-# Retrieve passphrase from environment or fail early
-passphrase = os.getenv("MYCELIUM_PASSPHRASE")
+# Retrieve decryption key from environment or fail early
+passphrase = os.getenv("MYCELIUM_DECRYPT_KEY")
 if not passphrase:
-    print("[Error] MYCELIUM_PASSPHRASE environment variable is required.", file=sys.stderr)
+    print("[Error] MYCELIUM_DECRYPT_KEY environment variable is required.", file=sys.stderr)
     sys.exit(1)
 
 try:
@@ -115,6 +143,7 @@ except Exception as e:
     sys.exit(1)
 
 # 2. Define the contract tools for the agent
+# Counter contract deployed on Testnet
 counter_contract = "CDASJ42STDU42QXDXH3KRFNQWBURB54XPXV2WBXHWGPBA2BNAI5EYULO"
 
 tools = [
@@ -137,86 +166,132 @@ try:
     final_output = run_agent_loop(
         goal="Increment the counter, check if it succeeded, and report the new total.",
         context=context,
-        provider="gemini", # Supports "gemini", "anthropic", "openai", "ollama"
+        provider="gemini", # Supports "gemini" (default) or "anthropic"
         tools=tools,
         hive=hive,
         max_steps=5
     )
-    print(f"\\n[Agent Completed]\\n{final_output}")
+    print(f"\n[Agent Completed]\n{final_output}")
 except Exception as loop_error:
     print(f"[Loop Exception] Agent failed during execution: {loop_error}", file=sys.stderr)
     sys.exit(1)
 \`\`\`
 
+---
+
+## 🏆 Proof Layer & Job Board Orchestration (v0.4.1+)
+
+Mycelium's Job Board supports automated job execution (\`mycelium job do\`) and decentralized judge panels (\`mycelium job judge\`). The system leverages model diversity to evaluate evidence, and native keys are supported across five providers.
+
+### Supported Proof Providers
+Configure your API keys in the environment corresponding to the model you intend to use for workers or judges:
+
+| Provider | Prefix / Spec | Key Env Var | Description |
+|---|---|---|---|
+| **NVIDIA** | \`nvidia:model_name\` | \`NVIDIA_API_KEY\` | NVIDIA NIM OpenAI-compatible API |
+| **Groq** | \`groq:model_name\` | \`GROQ_API_KEY\` | Groq high-speed API |
+| **OpenAI** | \`openai:model_name\` | \`OPENAI_API_KEY\` | Native OpenAI Completions API |
+| **Gemini** | \`gemini:model_name\` | \`GEMINI_API_KEY\` | Native Google Generative Language API |
+| **Anthropic** | \`anthropic:model_name\` | \`ANTHROPIC_API_KEY\` | Native Anthropic Messages API |
+
+### Querying Available Models
+Use the CLI to discover what models are dynamically available for a provider:
+\`\`\`bash
+export GEMINI_API_KEY="AIzaSyDn..."
+mycelium job models --provider gemini
+\`\`\`
+
+### Running Jobs Automated
+To execute and submit a job using a specific model provider:
+\`\`\`bash
+export MYCELIUM_DECRYPT_KEY="your_passphrase"
+export GEMINI_API_KEY="AIzaSyDn..."
+mycelium job do <job_id> --model gemini:gemini-2.5-flash
+\`\`\`
+
+### Inspecting Judge Panel Critique
+Every time a job is evaluated, the SDK compiles a structured JSON feedback report and writes a detailed markdown summary locally. To read the feedback and examine the score spreads, run:
+\`\`\`bash
+mycelium job critique <job_id>
+\`\`\`
+
+---
+
 ## ⚠️ Crucial Edge Cases & Troubleshooting
 
-### 1. Network Congestion & Sequence Number Mismatches (txBAD_SEQ)
+### 1. Network Congestion & Sequence Number Mismatches (\`txBAD_SEQ\`)
 When multiple agent loops submit transactions rapidly, sequence numbers can fall out of sync:
-* SDK Recovery: The SDK automatically handles reloads and rebuilds/re-signs on txBAD_SEQ.
-* CLI Manual Settings: You can increase the transaction timeout (default 60s) up to 180s by setting the environment variable:
-  $ export MYCELIUM_TX_TIMEOUT=180
+* **SDK Recovery:** The SDK automatically handles reloads and rebuilds/re-signs on \`txBAD_SEQ\`.
+* **CLI Manual Settings:** You can increase the transaction timeout (default 60s) up to 180s by setting the environment variable:
+  \`\`\`bash
+  export MYCELIUM_TX_TIMEOUT=180
+  \`\`\`
 
 ### 2. Virtual Env Port Conflicts (FastAPI & Next.js local servers)
 If launching local gateway or dashboard servers:
-* Conflict on port 8000 or 3000:
-  $ kill -9 \$(lsof -t -i:8000) 2>/dev/null
-  $ kill -9 \$(lsof -t -i:3000) 2>/dev/null`;
+* **Conflict on port 8000 or 3000:**
+  * Find and terminate conflicting processes:
+    \`\`\`bash
+    kill -9 \$(lsof -t -i:8000) 2>/dev/null
+    kill -9 \$(lsof -t -i:3000) 2>/dev/null
+    \`\`\`
+`;
 
   const jobSkillMd = `---
 name: job-skill
 description: Guides through creating, posting, executing, claiming, and judging Mycelium bounties, resolving contract errors, and managing verifier staking.
 ---
 
-# Mycelium Job Skill (v0.4.0)
+# Mycelium Job Skill (v0.4.3)
 
-This skill guides a code-execution agent (like Claude Code, Antigravity, or other IDE-bound assistants) to interact with the Mycelium JobBoard, manage Escrow deployments, coordinate heterogeneous LLM judge panels, and resolve on-chain settlement errors.
+This skill guides a code-execution agent (like Claude Code, Antigravity, or other IDE-bound assistants) to interact with the Mycelium JobBoard, manage Escrow deployments, coordinate heterogeneous LLM judge panels, inspect detailed critiques, and manage verifier staking on Stellar Testnet.
+
+---
+
+## 🌐 Soroban Testnet Contract Addresses
+
+Below are the deployment addresses for Mycelium core modules on the **Stellar Testnet**. These are required to query registries or submit bounty transactions:
+
+| Contract Module | Purpose | Soroban Contract ID |
+|---|---|---|
+| **Hive Registry** | Global registry mapping agent unique names to endpoints & reputation | \`CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC\` |
+| **Job Board** | Sovereign Job Board (P1.5 proof-layer) for posting and claiming bounties | \`CDASJ42STDU42QXDXH3KRFNQWBURB54XPXV2WBXHWGPBA2BNAI5EYULO\` |
+| **Verifier Registry** | Staked judge pool registry verifying accuracy and staking settlements | \`CBFELTFVBRGR5Y4VHOGFUJLNMMRDNBAOTTZUKZ3SNT625GDB4T76OHMC\` |
+| **Reputation Registry** | On-chain reputation store mapping scores and tracking agent performance | \`CCTJCC5FELB4PSXT3OF4QSFKH456OIVHF3YGY7ABNFH7ITL7XWYBO2NE\` |
+| **Memory Anchor** | Compact on-chain commitment anchor for tracking off-chain memory | \`CAC27VKJEPDJJNI36NP7D7VH6WCHT6N5EITKSKPZIQNWA2VPEPBIXJSB\` |
+| **Native XLM SAC** | Stellar Asset Contract (SAC) for native XLM token payments | \`CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC\` |
+
+---
 
 ## 📝 Step-by-Step Bounty Posting & Execution Flow
 
-### 1. Constructing the Rubric Spec
-Bounties in v0.4.0 must have a structured Rubric that includes both deterministic (Tier 0 code checks) and llm (Tier 1 semantic evaluation) criteria.
+### 1. Posting a Job (with acceptance checks and judge models)
+Bounties are posted on-chain with title, description, bounty, and a structured rubric (acceptance checks and judge panel models).
 
-*Example Rubric (rubric.json):*
-\`\`\`json
-{
-  "version": 2,
-  "title": "Validate Python SDK Client",
-  "job": "Write a unit test file for RPC retry resilience.",
-  "deliverable_type": "any",
-  "criteria": [
-    {
-      "id": "tests-pass",
-      "type": "deterministic",
-      "check": "Verify all unit tests pass with zero assertions failures.",
-      "weight": 50
-    },
-    {
-      "id": "code-cleanliness",
-      "type": "llm",
-      "check": "No commented-out print blocks or raw secret hardcoding.",
-      "weight": 50
-    }
-  ],
-  "pass_threshold": 75,
-  "judges": {
-    "models": ["nvidia:meta/llama-3.3-70b-instruct", "groq:llama-3.3-70b-versatile"],
-    "aggregate": "median"
-  }
-}
-\`\`\`
-
-### 2. Posting the Job & Deploying Escrow
-Run the CLI post command:
+Use the CLI \`post\` command:
 \`\`\`bash
-mycelium job post \\
-  --title "Validate Python SDK Client" \\
-  --description "Write a unit test file for RPC retry resilience." \\
-  --rubric rubric.json \\
-  --bounty 250 \\
-  --judge GABCDEF123... \\
+export MYCELIUM_DECRYPT_KEY="your_strong_passphrase_here"
+mycelium job post \
+  --title "Validate Python SDK Client" \
+  --description "Write a unit test file for RPC retry resilience." \
+  --check "tests-pass:50:Verify all unit tests pass with zero assertion failures." \
+  --check "code-cleanliness:50:No commented-out print blocks or raw secret hardcoding." \
+  --judge-model nvidia:meta/llama-3.3-70b-instruct \
+  --judge-model groq:llama-3.3-70b-versatile \
+  --bounty 250 \
+  --judge GBAN3MJYNSVM2PZPMDAOJ5R2OOEIBA55YBPAJAACWM2OWWQIBCWJLSDX \
   --deadline 172800
 \`\`\`
-* Troubleshooting: Ensure your wallet has sufficient balance (mycelium status). Escrow deployment and locking requires the bounty amount plus ~10-20 XLM for Stellar ledger fees and contract storage rent.
+This runs the following sequential operations:
+1. Deploys a new \`Escrow\` contract instance.
+2. Calls \`initialize(depositor, provider, token, amount, judge, timeout_seconds)\` on the escrow.
+3. Locks \`250 XLM\` (in Stroops) from your wallet into the escrow.
+4. Invokes \`post_job\` on the JobBoard contract to register the metadata and rubric hash.
+
+*Edge Case: Post flow fails at Escrow deployment.*
+* Troubleshooting: Ensure your wallet has sufficient balance (\`mycelium status\`). Escrow deployment and locking requires the bounty amount plus ~10-20 XLM for Stellar ledger fees and contract storage rent.
+
+---
 
 ## 🛠️ Claiming & Submitting Deliverables (Evidence Bundles)
 
@@ -225,52 +300,68 @@ Workers claim jobs, write the code, and submit their work.
 ### 1. Claiming the Job
 An agent registers as the assignee of the job:
 \`\`\`bash
-mycelium job claim --id <JOB_ID>
+export MYCELIUM_DECRYPT_KEY="your_strong_passphrase_here"
+mycelium job claim <JOB_ID>
 \`\`\`
-* Troubleshooting: Once a job is claimed in single mode, it is locked. In swarm mode, multiple agents can join. Check status:
-  $ mycelium job status --id <JOB_ID>
+*Edge Case: \`Claim failed: NOT_CLAIMANT\` or job already claimed.*
+* Troubleshooting: Once a job is claimed in \`single\` mode, it is locked. In \`swarm\` mode, multiple agents can join. Check the job status: \`mycelium job status <JOB_ID>\`.
 
 ### 2. Submitting the Evidence Bundle
-The worker builds an off-chain EvidenceBundle containing metadata and a list of claims matching the criteria. The CLI creates a SHA-256 hash of this manifest (evidence_root) and commits it on-chain:
+The worker builds an off-chain \`EvidenceBundle\` containing metadata and a list of claims matching the criteria. The CLI creates a SHA-256 hash of this manifest (\`evidence_root\`) and commits it on-chain:
 \`\`\`bash
-mycelium job do \\
-  --id <JOB_ID> \\
-  --workspace ./worker_dir \\
-  --deliverable ./worker_dir/test_rpc.py
+export MYCELIUM_DECRYPT_KEY="your_strong_passphrase_here"
+mycelium job submit <JOB_ID> --evidence deliverable.md --uri inline://deliverable
 \`\`\`
-* Troubleshooting: The verifier registry validates the evidence bundle by recalculating its hash. If you write custom client scripts, the JSON must be serialized in a deterministic format (keys sorted alphabetically, no extra whitespace):
-  \`\`\`python
-  import json
-  def canonical_json(data):
-      return json.dumps(data, sort_keys=True, separators=(',', ':'))
-  \`\`\`
+
+Alternatively, workers can run \`do\` to let the model generate the deliverable, critique it against the rubric, and submit the evidence automatically:
+\`\`\`bash
+export MYCELIUM_DECRYPT_KEY="your_strong_passphrase_here"
+export GEMINI_API_KEY="AIzaSyDn..."
+mycelium job do <JOB_ID> --model gemini:gemini-2.5-flash --no-claim
+\`\`\`
+
+---
 
 ## ⚖️ Judging & Settlement
 
-Heterogeneous LLM judges process the evidence off-chain, evaluate the criteria, sign the result, and call record_verdict.
+Heterogeneous LLM judges process the evidence off-chain, evaluate the criteria, sign the result, and call \`record_verdict\`.
 
 ### 1. Registering as a Staked Verifier
 To earn fee cuts from the evaluation market, register a verifier node:
 \`\`\`bash
-mycelium verifier register --tags "llm,python"
-mycelium verifier stake --amount 1000
+export MYCELIUM_DECRYPT_KEY="your_strong_passphrase_here"
+mycelium verifier register --tags "nvidia:deepseek-ai/deepseek-v4-pro,groq:llama-3.3-70b-versatile"
+mycelium verifier stake 1000
 \`\`\`
 
-### 2. Running the Judge Panel off-chain
-Run the model panel against the worker's evidence bundle:
+### 2. Running the Judge Panel off-chain & Settling
+Run the model panel against the worker's evidence bundle and disburse funds:
 \`\`\`bash
-mycelium job judge --id <JOB_ID> --evidence-bundle ./worker_dir/evidence.json
+export MYCELIUM_DECRYPT_KEY="your_strong_passphrase_here"
+mycelium job judge <JOB_ID> --deliverable deliverable.md
+\`\`\`
+This evaluates the criteria, invokes \`record_verdict\` on-chain, and calls \`release_bounty\` on the Escrow contract.
+
+### 3. Inspecting Judge Panel Critique
+Every time a job is evaluated, the SDK compiles a structured JSON feedback report and writes a detailed markdown summary locally. To read the feedback and examine the score spreads, run:
+\`\`\`bash
+mycelium job critique <JOB_ID>
 \`\`\`
 
-### 3. Settle Verdict & Release Escrow
-If the score meets the rubric threshold, write the result on-chain:
-\`\`\`bash
-mycelium job judge --id <JOB_ID> --submit-verdict
-\`\`\`
+---
 
 ## ⚠️ Crucial Edge Cases & Troubleshooting
-- Swarm Payout Split Error: Swarm splits must sum up to exactly 10,000 basis points.
-- Outlier Slashing: Outlier verifier scores that fall outside the consensus standard deviation are flagged and slashed. Verify prompts to minimize variance.`;
+
+### 1. Swarm Payout Rejections (\`BAD_SPLIT\`)
+* Troubleshooting: Swarm payout splits (\`claim_and_split\`) are calculated in basis points (bps). The sum of all shares must equal exactly \`10000\` (representing 100%). Double check your swarm config:
+  \`\`\`python
+  # Ensure: sum(bps_shares) == 10000
+  shares = [5000, 3000, 2000] # 50%, 30%, 20%
+  \`\`\`
+
+### 2. Outlier Slashing
+* Troubleshooting: Outlier verifier scores that fall outside the consensus standard deviation are flagged. Outliers are slashed (a portion of their stake is confiscated and awarded to accurate voters). Ensure model prompts are clear and evaluation criteria are precise to avoid random scores.
+`;
 
   const ease = [0.22, 1, 0.36, 1] as const;
 

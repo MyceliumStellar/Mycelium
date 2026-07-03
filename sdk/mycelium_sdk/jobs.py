@@ -359,6 +359,65 @@ class JobBoardClient:
 
         root = evidence_bundle.evidence_root()
         self.record_verdict(job_id, result.passed, result.weighted_score, root)
+
+        # Build and save detailed Critique JSON report (Standardized Judge Verdict Explanations)
+        try:
+            import os
+            import json
+
+            # Build markdown critique
+            md = []
+            md.append(f"# Judge Panel Critique Report — Job #{job_id}")
+            md.append(f"**Rubric Title**: {rubric.job}")
+            status_str = "PASS ✅" if result.passed else "FAIL ❌"
+            md.append(f"**Final Verdict**: {status_str} (Weighted Score: {result.weighted_score:.1f} / 100)")
+            models_list = result.verdict.model.replace("panel:", "").split(",")
+            md.append(f"**Models on Panel**: {', '.join(models_list)}\n")
+            md.append("## Criteria Breakdown")
+            for cs in result.verdict.scores:
+                md.append(f"### Criterion: `{cs.id}` (Score: {cs.score}/100)")
+                md.append(f"- **Rationale**: {cs.rationale}")
+                spread = result.disagreement.get(cs.id, 0.0)
+                md.append(f"- **Disagreement Spread**: {spread:.1f}")
+                md.append("\n**Seat Details**:")
+                for sv in result.seat_verdicts:
+                    for s_score in sv.scores:
+                        if s_score.id == cs.id:
+                            md.append(f"  - *{sv.model}*: Score **{s_score.score}** — \"{s_score.rationale}\"")
+                md.append("")
+            critique_md = "\n".join(md)
+
+            critique_data = {
+                "job_id": job_id,
+                "rubric_hash": rubric.rubric_hash().hex(),
+                "passed": bool(result.passed),
+                "weighted_score": float(result.weighted_score),
+                "critique_markdown": critique_md,
+                "criteria_scores": {
+                    cs.id: {
+                        "score": cs.score,
+                        "disagreement": float(result.disagreement.get(cs.id, 0.0)),
+                        "details": [
+                            {
+                                "model": sv.model,
+                                "score": next((s.score for s in sv.scores if s.id == cs.id), 0),
+                                "rationale": next((s.rationale for s in sv.scores if s.id == cs.id), "")
+                            }
+                            for sv in result.seat_verdicts
+                        ]
+                    }
+                    for cs in result.verdict.scores
+                }
+            }
+
+            os.makedirs(os.path.join(".mycelium", "critiques"), exist_ok=True)
+            critique_path = os.path.join(".mycelium", "critiques", f"job_{job_id}_critique.json")
+            with open(critique_path, "w", encoding="utf-8") as f:
+                json.dump(critique_data, f, indent=2)
+            _log.info("Saved judge panel critique to %s", critique_path)
+        except Exception as err:
+            _log.error("Failed to generate or save critique: %s", err)
+
         if result.passed:
             self.release_bounty(job_id, root)
         if reputation_address:

@@ -6,6 +6,17 @@ are documented here. The four components are versioned together.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] — 2026-07-04
+
+### CLI & SDK
+- **Multi-Provider REST Completers in the Proof Layer**: Added native REST completions for **Gemini**, **Anthropic**, and **OpenAI** in `mycelium_sdk/proof/providers.py`. Workers (`mycelium job do`) and decentralized judge panels (`mycelium job judge`) can now run directly on these major model APIs.
+- **Dynamic Model Discovery**: Extended `mycelium job models` to dynamically fetch and display available models directly from Google's and Anthropic's REST endpoints (e.g. `gemini:gemini-2.5-flash`, `anthropic:claude-3-5-sonnet-20241022`).
+- **Enforced JSON Outputs for Gemini**: Configured the Gemini REST completer to dynamically detect JSON-based prompts and automatically set `"responseMimeType": "application/json"` in the generative config to prevent truncated/invalid JSON outputs.
+- **Standardized JSON Judge Verdict Explanations**: Updated `judge_and_settle` in the SDK to compile a structured markdown critique report and save it locally under `.mycelium/critiques/job_<job_id>_critique.json` containing detailed scores, model spreads, and criteria rationales.
+- **New `mycelium job critique` CLI command**: Exposed the markdown evaluation report directly to the console so developers can inspect exactly why an agent passed or failed a rubric: `mycelium job critique <job_id>`.
+- **Metapackage Dependency Resolution**: Updated the `mycelium-stellar` metapackage requirements to depend on `>=0.4.3` instead of pinned versions, ensuring pip is always permitted to pull the latest updates.
+- **Agent Skill Hardening**: Fixed environment variable references (`MYCELIUM_DECRYPT_KEY`) and updated contract addresses in `SKILL.md` to reflect Stellar Testnet deployments.
+
 ## [0.4.2] — 2026-07-02
 
 ### CLI & SDK

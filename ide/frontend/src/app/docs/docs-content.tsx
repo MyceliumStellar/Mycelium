@@ -472,6 +472,7 @@ export default function DocsContent({ slug: rawSlug }: { slug: string }) {
       { id: "proof-verifiers", label: "Verifiers & Staking" }
     ],
     "changelog": [
+      { id: "v043", label: "0.4.3" },
       { id: "v042", label: "0.4.2" },
       { id: "v041", label: "0.4.1" },
       { id: "v040", label: "0.4.0" },
@@ -2318,6 +2319,23 @@ mycelium agent reputation --address GABCDEF123...`}
             <P>
               All notable changes to the Mycelium framework (SDK, CLI, compiler, and Web IDE) are documented here.
             </P>
+
+            <SectionH2 id="v043">Version 0.4.3 — Proof-Layer Provider Expansion & Critique Command Release</SectionH2>
+            <P><strong>Released on 2026-07-04</strong></P>
+            <P>
+              This release implements native REST integrations for Gemini, Anthropic, and OpenAI in the Proof System, dynamic model discovery, and structured judge critique reports. <InlineCode>mycelium-sdk</InlineCode>, <InlineCode>mycelium-cli</InlineCode>, <InlineCode>mycelium-compiler</InlineCode>, and the <InlineCode>mycelium-stellar</InlineCode> metapackage all move to <InlineCode>0.4.3</InlineCode>.
+            </P>
+
+            <SectionH3>Proof-Layer & CLI Updates</SectionH3>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>Multi-Provider REST Completers:</strong> Integrated native API wrappers for <InlineCode>gemini</InlineCode>, <InlineCode>anthropic</InlineCode>, and <InlineCode>openai</InlineCode> inside the proof evaluation backend, letting judge panels run on all five model APIs directly without local SDK library dependencies.</li>
+              <li><strong>Dynamic Model Discovery:</strong> Extended the <InlineCode>mycelium job models</InlineCode> command to query and parse available models dynamically from Google and Anthropic endpoints.</li>
+              <li><strong>JSON Response Enforcement:</strong> Upgraded the Gemini completer to automatically check for JSON instructions in the prompt and enforce structured <InlineCode>responseMimeType: &quot;application/json&quot;</InlineCode>, preventing malformed outputs.</li>
+              <li><strong>Judge Panel Critiques:</strong> Configured evaluations to compile a detailed Markdown critique report saved locally under <InlineCode>.mycelium/critiques/job_&lt;id&gt;_critique.json</InlineCode> mapping seat rationales and model spreads.</li>
+              <li><strong>Critique Inspection CLI:</strong> Added the new CLI command <InlineCode>mycelium job critique &lt;job_id&gt;</InlineCode> to render the detailed markdown critique directly to the console.</li>
+              <li><strong>Metapackage Dependency Optimization:</strong> Configured <InlineCode>mycelium-stellar</InlineCode> requirements as open <InlineCode>&gt;=0.4.3</InlineCode> constraints rather than pinned constants, ensuring pip retrieves the latest package versions.</li>
+              <li><strong>Agent Skill Corrections:</strong> Updated the default skill files to correct decryption key variables (<InlineCode>MYCELIUM_DECRYPT_KEY</InlineCode>) and hardcode testnet core contract IDs for onboarding.</li>
+            </ul>
 
             <SectionH2 id="v042">Version 0.4.2 — Terminal Visual Upgrades & Windows Formatting Release</SectionH2>
             <P><strong>Released on 2026-07-02</strong></P>

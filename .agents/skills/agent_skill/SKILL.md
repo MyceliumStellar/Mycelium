@@ -3,9 +3,9 @@ name: agent-skill
 description: Setup Mycelium environment, install SDK/CLI, configure wallets, resolve network congestion, and scaffold autonomous agent loops.
 ---
 
-# Mycelium Agent Skill (v0.4.0)
+# Mycelium Agent Skill (v0.4.3)
 
-This skill guides a code-execution agent (like Claude Code, Antigravity, or other IDE-bound assistants) to setup the Mycelium autonomous agent runtime on Stellar Testnet, resolve developer environmental errors, and program stateless loop integrations.
+This skill guides a code-execution agent (like Claude Code, Antigravity, or other IDE-bound assistants) to setup the Mycelium autonomous agent runtime on Stellar Testnet, resolve developer environmental errors, program stateless loop integrations, and use the Proof Layer Job Board.
 
 ---
 
@@ -23,7 +23,7 @@ source venv/bin/activate
 ### 2. Installing the Metapackage
 ```bash
 pip install --upgrade pip
-pip install mycelium-stellar==0.4.0
+pip install mycelium-stellar==0.4.3
 ```
 *Edge Case: `mycelium-stellar` fails to compile some C extensions (e.g. cryptography).*
 * Troubleshooting: Ensure build-essential package compiler is installed. On Debian/Ubuntu: `sudo apt-get install build-essential python3-dev libssl-dev libffi-dev`.
@@ -36,6 +36,21 @@ mycelium init
 
 ---
 
+## 🌐 Soroban Testnet Contract Addresses
+
+Below are the default contract deployment addresses for Mycelium core modules on the **Stellar Testnet**. Execution agents can read these addresses directly to query state or submit transactions:
+
+| Contract Module | Purpose | Soroban Contract ID |
+|---|---|---|
+| **Hive Registry** | Global registry mapping agent unique names to endpoints & reputation | `CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC` |
+| **Job Board** | Sovereign Job Board (P1.5 proof-layer) for posting and claiming bounties | `CDASJ42STDU42QXDXH3KRFNQWBURB54XPXV2WBXHWGPBA2BNAI5EYULO` |
+| **Verifier Registry** | Staked judge pool registry verifying accuracy and staking settlements | `CBFELTFVBRGR5Y4VHOGFUJLNMMRDNBAOTTZUKZ3SNT625GDB4T76OHMC` |
+| **Reputation Registry** | On-chain reputation store mapping scores and tracking agent performance | `CCTJCC5FELB4PSXT3OF4QSFKH456OIVHF3YGY7ABNFH7ITL7XWYBO2NE` |
+| **Memory Anchor** | Compact on-chain commitment anchor for tracking off-chain memory | `CAC27VKJEPDJJNI36NP7D7VH6WCHT6N5EITKSKPZIQNWA2VPEPBIXJSB` |
+| **Native XLM SAC** | Stellar Asset Contract (SAC) for native XLM token payments | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
+
+---
+
 ## 🔑 Wallet Scaffolding & Key Management
 
 ### 1. Generating Wallet
@@ -45,9 +60,9 @@ mycelium newwallet
 ```
 You will be prompted to choose a password.
 *Edge Case: Scripted/automated execution halts at passphrase prompt.*
-* Troubleshooting: Set `MYCELIUM_PASSPHRASE` environment variable before running. The CLI automatically reads this variable to skip interactive prompts:
+* Troubleshooting: Set the `MYCELIUM_DECRYPT_KEY` environment variable before running. The CLI automatically reads this variable to skip interactive prompts:
   ```bash
-  export MYCELIUM_PASSPHRASE="your_strong_passphrase_here"
+  export MYCELIUM_DECRYPT_KEY="your_strong_passphrase_here"
   mycelium newwallet
   ```
 
@@ -74,10 +89,10 @@ import os
 import sys
 from mycelium import AgentContext, HiveClient, run_agent_loop, ContractTool
 
-# Retrieve passphrase from environment or fail early
-passphrase = os.getenv("MYCELIUM_PASSPHRASE")
+# Retrieve decryption key from environment or fail early
+passphrase = os.getenv("MYCELIUM_DECRYPT_KEY")
 if not passphrase:
-    print("[Error] MYCELIUM_PASSPHRASE environment variable is required.", file=sys.stderr)
+    print("[Error] MYCELIUM_DECRYPT_KEY environment variable is required.", file=sys.stderr)
     sys.exit(1)
 
 try:
@@ -113,7 +128,7 @@ try:
     final_output = run_agent_loop(
         goal="Increment the counter, check if it succeeded, and report the new total.",
         context=context,
-        provider="gemini", # Supports "gemini" (default), "anthropic", "openai", "ollama"
+        provider="gemini", # Supports "gemini" (default) or "anthropic"
         tools=tools,
         hive=hive,
         max_steps=5
@@ -122,6 +137,44 @@ try:
 except Exception as loop_error:
     print(f"[Loop Exception] Agent failed during execution: {loop_error}", file=sys.stderr)
     sys.exit(1)
+```
+
+---
+
+## 🏆 Proof Layer & Job Board Orchestration (v0.4.1+)
+
+Mycelium's Job Board supports automated job execution (`mycelium job do`) and decentralized judge panels (`mycelium job judge`). The system leverages model diversity to evaluate evidence, and native keys are supported across five providers.
+
+### Supported Proof Providers
+Configure your API keys in the environment corresponding to the model you intend to use for workers or judges:
+
+| Provider | Prefix / Spec | Key Env Var | Description |
+|---|---|---|---|
+| **NVIDIA** | `nvidia:model_name` | `NVIDIA_API_KEY` | NVIDIA NIM OpenAI-compatible API |
+| **Groq** | `groq:model_name` | `GROQ_API_KEY` | Groq high-speed API |
+| **OpenAI** | `openai:model_name` | `OPENAI_API_KEY` | Native OpenAI Completions API |
+| **Gemini** | `gemini:model_name` | `GEMINI_API_KEY` | Native Google Generative Language API |
+| **Anthropic** | `anthropic:model_name` | `ANTHROPIC_API_KEY` | Native Anthropic Messages API |
+
+### Querying Available Models
+Use the CLI to discover what models are dynamically available for a provider:
+```bash
+export GEMINI_API_KEY="AIzaSyDn..."
+mycelium job models --provider gemini
+```
+
+### Running Jobs Automated
+To execute and submit a job using a specific model provider:
+```bash
+export MYCELIUM_DECRYPT_KEY="your_passphrase"
+export GEMINI_API_KEY="AIzaSyDn..."
+mycelium job do <job_id> --model gemini:gemini-2.5-flash
+```
+
+### Inspecting Judge Panel Critique
+Every time a job is evaluated, the SDK compiles a structured JSON feedback report and writes a detailed markdown summary locally. To read the feedback and examine the score spreads, run:
+```bash
+mycelium job critique <job_id>
 ```
 
 ---

@@ -342,6 +342,27 @@ def models(
         typer.echo(f"  {provider}:{i}")
 
 
+@job_app.command("critique")
+def critique(
+    job_id: int = typer.Argument(..., help="Job id to inspect critique for"),
+):
+    """View the judge panel's detailed markdown critique and scores for a judged job."""
+    import json
+
+    critique_path = os.path.join(".mycelium", "critiques", f"job_{job_id}_critique.json")
+    if not os.path.exists(critique_path):
+        typer.echo(f"❌ critique not found for Job #{job_id}. Run `mycelium job judge` first.")
+        raise typer.Exit(code=1)
+
+    try:
+        with open(critique_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        typer.echo(data.get("critique_markdown", ""))
+    except Exception as e:
+        typer.echo(f"❌ failed to read critique report: {e}")
+        raise typer.Exit(code=1)
+
+
 def _evidence_root(evidence: str) -> bytes:
     """
     The 32-byte evidence_root for a submission. If `evidence` is a file, hash its
