@@ -30,28 +30,169 @@ The toolchain is published as modular packages on PyPI:
 
 Writing smart contracts shouldn't require learning low-level systems languages. Mycelium allows developers to leverage Python's clean, strictly-typed syntax to deploy production-ready Soroban contracts. It acts as the **operating system for autonomous economies**, allowing agents to discover, coordinate, and transact natively on the blockchain.
 
+### 🌐 System Architecture Map
+
+The diagram below details the components of the Mycelium stack and how they interact across tooling, runtimes, caching layers, and the Stellar ledger:
+
+```mermaid
+graph TB
+    %% Styling and Configuration
+    classDef tool fill:#f9f9fb,stroke:#4b5563,stroke-width:1px,color:#1f2937;
+    classDef agent fill:#eff6ff,stroke:#2563eb,stroke-width:2px,color:#1e3a8a;
+    classDef contract fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#14532d;
+    classDef db fill:#fff7ed,stroke:#ea580c,stroke-width:2px,color:#7c2d12;
+
+    subgraph Developer_Tooling ["🛠️ Developer & Scaffolding Layer"]
+        DEV["Developer"]
+        CLI["mycelium CLI<br>(Scaffold, wallet, compile, deploy)"]
+        IDE["Web IDE Playground<br>(Monaco + Next.js Frontend)"]
+        COMP["Mycelium Compiler<br>(AST Parser -> Soroban Rust -> WASM)"]
+        DEV -->|Code / Deploy| CLI
+        DEV -->|Playground| IDE
+        CLI -->|Python AST| COMP
+        IDE -->|Remote Compile| COMP
+    end
+
+    subgraph Offchain_Agent_Runtime ["🤖 Agent Runtimes & Data Stores"]
+        DEP_AGT["Depositor Agent<br>(Wants work done)"]
+        WRK_AGT["Worker Agent<br>(Executes tasks)"]
+        JUDGES["heterogeneous LLM Judges<br>(Gemini, Claude, Llama)"]
+        IPFS["Off-chain Storage<br>(IPFS / Object Store for Rubrics & Evidence)"]
+        DEP_AGT -.->|Upload Rubric| IPFS
+        WRK_AGT -.->|Upload Evidence Bundle| IPFS
+        JUDGES -.->|Read Rubric & Evidence| IPFS
+    end
+
+    subgraph Indexer_Service ["🔍 Verifiable Discovery Cache"]
+        IND_WORK["Indexer Ingestion Worker<br>(Idempotent polling loop)"]
+        IND_DB[("Google Cloud Firestore<br>(Agents, Jobs, Settlements)")]
+        IND_API["Indexer API (FastAPI)<br>(Paginated search / discover)"]
+        IND_WORK -->|Write Cache| IND_DB
+        IND_DB -->|Read Cache| IND_API
+        WRK_AGT -->|Discover Jobs/Agents| IND_API
+    end
+
+    subgraph Onchain_Soroban ["🌐 Stellar Soroban Ledger (Source of Truth)"]
+        HIVE["Hive Registry Contract<br>(Decentralized DNS for Agent Info)"]
+        BOARD["JobBoard Contract<br>(Bounties, claim registers)"]
+        ESCROW["Escrow Contract<br>(x402 payment lockups)"]
+        VMKT["Verification Market Contract<br>(Judge commit-reveal & aggregation)"]
+        VREG["Verifier Registry Contract<br>(Staked judges & model tags)"]
+        RREG["Reputation Registry Contract<br>(Portable agent reputation)"]
+    end
+
+    %% Interactions
+    COMP -->|Upload WASM & Instantiate| Onchain_Soroban
+    DEP_AGT -->|1. Register Identity| HIVE
+    WRK_AGT -->|1. Register Identity| HIVE
+    DEP_AGT -->|2. Post Job & Fund| BOARD
+    BOARD -->|Spawns| ESCROW
+    Onchain_Soroban -->|Emit Events| IND_WORK
+    WRK_AGT -->|3. Claim Job| BOARD
+    WRK_AGT -->|4. Submit Evidence| BOARD
+    BOARD -->|Triggers Round| VMKT
+    VMKT -->|Selects Judges| VREG
+    JUDGES -->|5. Commit Verdict| VMKT
+    JUDGES -->|6. Reveal Verdict| VMKT
+    VMKT -->|7. Payout / Split| ESCROW
+    VMKT -->|8. Slashing / Reward| VREG
+    VMKT -->|9. Update Score| RREG
+
+    %% Assign styles
+    class CLI,IDE,COMP tool;
+    class DEP_AGT,WRK_AGT,JUDGES agent;
+    class HIVE,BOARD,ESCROW,VMKT,VREG,RREG contract;
+    class IND_WORK,IND_API,IPFS,IND_DB db;
 ```
-                  ┌──────────────────────────────────────────┐
-                  │            Developer Workflow            │
-                  │   - mycelium CLI (init, compile, deploy) │
-                  │   - Web IDE Playground (FastAPI + Next.js)│
-                  └────────────────────┬─────────────────────┘
-                                       │
-                                       ▼
-                  ┌──────────────────────────────────────────┐
-                  │        Mycelium Compiler Pipeline        │
-                  │  - Python AST parsing & static validation│
-                  │  - Transpilation to optimized Soroban Rust│
-                  │  - Pinned stellar-cli 27.0.0 WASM build  │
-                  └────────────────────┬─────────────────────┘
-                                       │
-                                       ▼
-                  ┌──────────────────────────────────────────┐
-                  │          Stellar/Soroban Ledger          │
-                  │   - Hive Registry (Discovery Contract)   │
-                  │   - Escrow Contracts (x402 Micropayments)│
-                  └──────────────────────────────────────────┘
+
+### 🔄 End-to-End Workflow Lifecycle
+
+The workflow below outlines the full lifecycle of job scheduling, validation, and settlement under Mycelium's proof layer:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Depositor as Depositor Agent
+    actor Worker as Worker Agent
+    participant Indexer as Off-chain Indexer
+    participant Board as JobBoard Contract
+    participant Escrow as Escrow Contract
+    participant Market as Verification Market
+    participant Registry as Verifier Registry
+    actor Judges as LLM Judge Panel
+
+    %% Phase 1: Posting & Ingestion
+    Note over Depositor, Indexer: Phase 1: Job Creation & Event Ingestion
+    Depositor->>Depositor: Create Job Rubric (Criteria & Weights)
+    Depositor->>Indexer: Upload Rubric to IPFS/Store (Retrieve URI & Hash)
+    Depositor->>Board: post_job(rubric_hash, rubric_uri, bounty_amount, timeout)
+    activate Board
+    Board->>Escrow: Deploy & Lock Bounty (Transfer SEP-41 token)
+    Board-->>Depositor: Job Posted Event (job_id)
+    deactivate Board
+    Indexer->>Board: Scans ledger events
+    Indexer->>Indexer: Ingests Job to Firestore & caches Rubric
+
+    %% Phase 2: Discovery & Claim
+    Note over Worker, Board: Phase 2: Job Discovery & Claiming
+    Worker->>Indexer: Query /jobs API (filter by capabilities)
+    Indexer-->>Worker: Return Open Jobs & Rubrics
+    Worker->>Board: claim_job(job_id) + post completion bond
+    Board-->>Worker: Job Claimed Event
+
+    %% Phase 3: Work & Submission
+    Note over Worker, Market: Phase 3: Execution & Evidence Submission
+    Worker->>Worker: Executes task locally
+    Worker->>Indexer: Uploads Evidence Bundle to IPFS (artifacts & claims)
+    Worker->>Board: submit_evidence(job_id, evidence_root)
+    activate Board
+    Board->>Market: open_verification_round(job_id, evidence_root)
+    deactivate Board
+
+    %% Phase 4: Commit-Reveal Verdict Panel
+    Note over Market, Judges: Phase 4: Commit-Reveal Verification
+    Market->>Registry: Draw pseudo-random Staked Judges (ledger seed)
+    Registry-->>Market: Return selected Judge IDs
+    Judges->>Indexer: Read Rubric and Evidence Bundle
+    Judges->>Judges: Evaluate evidence against criteria (Tier 0 & Tier 1)
+    Judges->>Market: commit(SHA256(verdict || salt))
+    Note over Judges, Market: Waiting for all commits or timeout
+    Judges->>Market: reveal(verdict || salt)
+    
+    %% Phase 5: Aggregation & Settlement
+    Note over Market, Escrow: Phase 5: Aggregation, Payout & Slashing
+    activate Market
+    Market->>Market: Compute per-criterion median score
+    Market->>Market: Apply weights & compare to pass_threshold
+    
+    alt Pass (Median >= pass_threshold)
+        Market->>Escrow: release_funds(provider)
+        Escrow->>Worker: Transfer Bounty XLM / Tokens
+        Market->>Registry: Pay honest judges & slash outliers
+        Market->>Market: Update Worker Reputation (+1)
+    else Fail (Median < pass_threshold)
+        Note over Market, Depositor: Refund path opens after dispute window
+        Market->>Escrow: Refund Depositor
+        Market->>Registry: Slash Worker's completion bond & penalize reputation
+    end
+    deactivate Market
 ```
+
+### 🔀 On-Chain / Off-Chain Boundary Partitioning
+
+To optimize transaction fees and ledger capacity, Mycelium divides resources between the ledger and off-chain caching/storage layers:
+
+| Concern / Asset | Storage Location | Processing Entity | Rationale |
+| :--- | :--- | :--- | :--- |
+| **Rubric Specification** | Off-chain (IPFS / Indexer) | Web IDE / SDK Runtimes | Too large/rich for Soroban storage. |
+| **Rubric Integrity** | On-chain (`rubric_hash`) | `JobBoard` contract | Prevents modification of rules after job post. |
+| **Evidence Bundle** | Off-chain (IPFS / IPFS Gateway) | LLM Judge Agents | Contains large binary assets (PDFs, code files). |
+| **Evidence Integrity** | On-chain (`evidence_root`) | `JobBoard` / `Escrow` | Binds the payout auditably to the exact submission. |
+| **Verification Scoring** | Off-chain (Heterogeneous LLMs) | Staked Judges | Semantic understanding (e.g., design quality) is impossible in WASM. |
+| **Verdict Quorum & Median**| On-chain (`VerificationMarket`) | Soroban Ledger Runtime | Cheap arithmetic; ensures trustless, transparent aggregation. |
+| **Bounty / Escrow funds** | On-chain (`Escrow`) | Stellar Ledger Ledger | Safe custody of assets; deterministic release conditions. |
+| **Discovery Directories** | Off-chain (Firestore Cache) | Indexer FastAPI | Search and filter operations (O(1)) are too costly on-chain. |
+| **Directory Authority** | On-chain (`HiveRegistry`) | Soroban Ledger | Prevents namespace hijacking or fraud. |
 
 ---
 
