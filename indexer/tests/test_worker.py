@@ -227,6 +227,6 @@ def test_cursor_advances_to_last_event_ledger():
     events = [_Event("job_posted", [1, "GP", 1], 207, "207-0")]
     w, db = _worker(events)
     w.run_once(from_ledger=1)
-    cur = db.store["indexer_meta/cursor"]
+    cur = db.store[f"indexer_meta/cursor_{w.network}"]
     assert cur["last_ledger"] == 207
     assert cur["last_event_id"] == "207-0"

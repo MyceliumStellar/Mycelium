@@ -434,9 +434,19 @@ Network-aware constants:
 |---|---|
 | `SOROBAN_RPC_URLS` | `{testnet: "https://soroban-testnet.stellar.org", mainnet: "https://mainnet.sorobanrpc.com"}` |
 | `HORIZON_URLS` | `{testnet: "https://horizon-testnet.stellar.org", mainnet: "https://horizon.stellar.org"}` |
-| `HIVEMIND_REGISTRY_ADDRESS` | `CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC` |
-| `MEMORY_ANCHOR_ADDRESS` | `CAC27VKJEPDJJNI36NP7D7VH6WCHT6N5EITKSKPZIQNWA2VPEPBIXJSB` |
+| `CONTRACT_ADDRESSES` | Per-network addresses dict for core contracts (`hive_registry`, `job_board`, etc.) |
+| `contract_address(name, network)` | Returns the deployed address for a contract on the specified network |
 | `native_token_address(network)` | Returns the SAC address for native XLM |
+
+---
+
+## Release 0.5.0 — Stellar Mainnet SDK Support
+
+Version `0.5.0` upgrades the Mycelium SDK to a network-agnostic design, supporting both Stellar Testnet and Stellar Mainnet:
+
+* **Network-Aware AgentContext:** The `AgentContext` constructor now takes a `network_type` string argument (`"testnet"` or `"mainnet"`). It automatically loads the correct network passphrase and targets the correct RPC endpoints.
+* **Per-Network Contract Resolution:** Top-level single contract address scalars are replaced with the `CONTRACT_ADDRESSES` per-network dictionary. Consumers use the `contract_address(name, network)` helper for dynamic lookups.
+* **Dynamic Fee Splitting:** Fee payee wallets dynamically route to `myceliummainnet` (Stellar Mainnet) or `myceliumtestnet` (Stellar Testnet) depending on the active context's target network.
 
 ---
 

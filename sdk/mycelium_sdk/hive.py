@@ -11,7 +11,7 @@ fail loudly at the RPC layer rather than returning fabricated data.
 import hashlib
 from typing import Any, Dict, List, Optional
 
-from mycelium_sdk.constants import HIVEMIND_REGISTRY_ADDRESS
+from mycelium_sdk.constants import contract_address
 from mycelium_sdk.events import (
     DEFAULT_LEDGER_WINDOW as _LEDGER_WINDOW,
     DEFAULT_MAX_WINDOWS as _MAX_WINDOWS,
@@ -29,7 +29,7 @@ class HiveClient:
                  indexer_url: Optional[str] = None):
         self.context = context
         # Allow per-deployment override (e.g. from mycelium.toml [registry]).
-        self.registry_address = registry_address or HIVEMIND_REGISTRY_ADDRESS
+        self.registry_address = registry_address or contract_address("hive_registry", getattr(self.context, "network_type", "testnet"))
         # Hosted indexer endpoint for O(1) discovery; None uses the SDK default.
         self.indexer_url = indexer_url
 

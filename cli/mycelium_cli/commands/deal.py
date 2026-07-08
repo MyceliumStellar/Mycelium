@@ -30,6 +30,7 @@ from decimal import Decimal
 from typing import Optional
 
 import typer
+from mycelium_cli.commands import resolve_network
 
 from mycelium_cli.config import get_value
 
@@ -96,10 +97,11 @@ def open_deal(
     judge: str = typer.Option(..., "--judge", help="Judge: unique name or G/C address — the release authority"),
     token: str = typer.Option(None, "--token", help="Payment token contract (defaults to native XLM SAC)"),
     timeout: int = typer.Option(DEFAULT_TIMEOUT_SECONDS, "--timeout", help="Refund deadline in seconds"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
     registry: str = typer.Option(None, "--registry", help="Hive Registry id override (for name resolution)"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Payer locks `amount` XLM to a provider, naming a judge as the release authority."""
     from mycelium_sdk.x402.settlement import EscrowPaymentRouter
 
@@ -128,9 +130,10 @@ def open_deal(
 def release(
     escrow_id: str = typer.Argument(..., help="Escrow contract id from `deal open`"),
     evidence: str = typer.Option(..., "--evidence", help="Evidence bundle file/string (its SHA-256 is recorded for audit)"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Judge wallet path (the escrow's release authority)"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Judge disburses the locked funds to the provider on a passing verdict."""
     from mycelium_sdk.x402.settlement import EscrowPaymentRouter
 
@@ -146,9 +149,10 @@ def release(
 @deal_app.command("refund")
 def refund(
     escrow_id: str = typer.Argument(..., help="Escrow contract id from `deal open`"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Payer reclaims the locked funds after the deadline passes."""
     from mycelium_sdk.x402.settlement import EscrowPaymentRouter
 
@@ -164,8 +168,9 @@ def refund(
 @deal_app.command("status")
 def status(
     escrow_id: str = typer.Argument(..., help="Escrow contract id from `deal open`"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Show an escrow deal's current state (read-only, no wallet)."""
     context = _context(network, DEFAULT_WALLET_PATH, signing=False)
     try:

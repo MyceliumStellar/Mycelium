@@ -386,6 +386,7 @@ export default function DocsContent({ slug: rawSlug }: { slug: string }) {
   const pageTOCMap: Record<string, { id: string; label: string }[]> = {
     "introduction": [
       { id: "overview", label: "Overview" },
+      { id: "contract-addresses", label: "Contract Addresses" },
       { id: "core-features", label: "Core Features" },
       { id: "why-mycelium", label: "Why Mycelium" },
       { id: "platform-components", label: "Platform Subsystems" }
@@ -472,6 +473,7 @@ export default function DocsContent({ slug: rawSlug }: { slug: string }) {
       { id: "proof-verifiers", label: "Verifiers & Staking" }
     ],
     "changelog": [
+      { id: "v050", label: "0.5.0" },
       { id: "v043", label: "0.4.3" },
       { id: "v042", label: "0.4.2" },
       { id: "v041", label: "0.4.1" },
@@ -530,6 +532,90 @@ export default function DocsContent({ slug: rawSlug }: { slug: string }) {
             <P>
               The platform ships as a single dependency-free package (installed via <InlineCode>pip install mycelium-stellar</InlineCode>) that bundles the compiler, the command line interface, the agent SDK, and the contract DSL (Domain Specific Language).
             </P>
+
+            <SectionH2 id="contract-addresses">Contract Addresses</SectionH2>
+            <P>
+              Mycelium contracts are deployed and verified on both Stellar Testnet and Stellar Mainnet (Public network). Below is the canonical registry of these core subsystem contracts with links to the Stellar Expert blockchain explorer:
+            </P>
+
+            <div style={{ overflowX: "auto", marginTop: 16, marginBottom: 32 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", color: "rgba(255,255,255,0.75)" }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid rgba(255,255,255,0.15)", textAlign: "left" }}>
+                    <th style={{ padding: "10px 12px", color: "#fff", fontWeight: 600 }}>Contract / Artifact</th>
+                    <th style={{ padding: "10px 12px", color: "#fff", fontWeight: 600 }}>Stellar Testnet Address</th>
+                    <th style={{ padding: "10px 12px", color: "#fff", fontWeight: 600 }}>Stellar Mainnet Address</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    {
+                      name: "Hive Registry",
+                      testnet: "CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC",
+                      mainnet: "CCFGTAAVOCU2VQNNQUJQQI3YET27PTM3GADCBYDLA6DISXUPR5CGRS5T",
+                    },
+                    {
+                      name: "Job Board",
+                      testnet: "CDASJ42STDU42QXDXH3KRFNQWBURB54XPXV2WBXHWGPBA2BNAI5EYULO",
+                      mainnet: "CABB4SSGE5NFOCH6KE4RNCA2MGHSQIFXUKS7OZ4B4GQOEJK6R4ZMP4LG",
+                    },
+                    {
+                      name: "Memory Anchor",
+                      testnet: "CAC27VKJEPDJJNI36NP7D7VH6WCHT6N5EITKSKPZIQNWA2VPEPBIXJSB",
+                      mainnet: "CDFXP42NITRLDGYUMJ5OT63EVWBROJTCXQR64GUSDWHY2LH3AQM2TXYP",
+                    },
+                    {
+                      name: "Verifier Registry",
+                      testnet: "CBFELTFVBRGR5Y4VHOGFUJLNMMRDNBAOTTZUKZ3SNT625GDB4T76OHMC",
+                      mainnet: "CA574F2GDVGJSITE52TFON7MA66HB6EC2IVPMXPO5OUWDAPJ5JVCSQHC",
+                    },
+                    {
+                      name: "Reputation Registry",
+                      testnet: "CCTJCC5FELB4PSXT3OF4QSFKH456OIVHF3YGY7ABNFH7ITL7XWYBO2NE",
+                      mainnet: "CB44VUD27BJN4R2VVUONP63TQ5LG523XPV4TKFF7CLC3MQBHI7DYKRBP",
+                    },
+                    {
+                      name: "Native SAC Token",
+                      testnet: "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+                      mainnet: "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA",
+                    },
+                  ].map(c => (
+                    <tr key={c.name} style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                      <td style={{ padding: "12px", fontWeight: 600 }}>{c.name}</td>
+                      <td style={{ padding: "12px" }}>
+                        <a
+                          href={`https://stellar.expert/explorer/testnet/contract/${c.testnet}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: "var(--accent-cyan)", textDecoration: "none", fontFamily: "var(--font-mono)", fontSize: "0.76rem" }}
+                        >
+                          {c.testnet.slice(0, 10)}...{c.testnet.slice(-6)}
+                        </a>
+                      </td>
+                      <td style={{ padding: "12px" }}>
+                        <a
+                          href={`https://stellar.expert/explorer/public/contract/${c.mainnet}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: "var(--accent-cyan)", textDecoration: "none", fontFamily: "var(--font-mono)", fontSize: "0.76rem" }}
+                        >
+                          {c.mainnet.slice(0, 10)}...{c.mainnet.slice(-6)}
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                    <td style={{ padding: "12px", fontWeight: 600 }}>Escrow WASM Template Hash</td>
+                    <td style={{ padding: "12px", fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "rgba(255,255,255,0.4)" }}>
+                      df39861bdd6a838826acb7fc9d965563ab166d5d15cd83cc9a8671448e0696ee
+                    </td>
+                    <td style={{ padding: "12px", fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "rgba(255,255,255,0.4)" }}>
+                      df39861bdd6a838826acb7fc9d965563ab166d5d15cd83cc9a8671448e0696ee
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
 
             <SectionH2 id="core-features">Core Features</SectionH2>
             <div style={{
@@ -2320,6 +2406,71 @@ mycelium agent reputation --address GABCDEF123...`}
               All notable changes to the Mycelium framework (SDK, CLI, compiler, and Web IDE) are documented here.
             </P>
 
+            <SectionH2 id="v050">Version 0.5.0 — Mainnet Launch & Multi-Network Expansion</SectionH2>
+            <P><strong>Released on 2026-07-08</strong></P>
+            <P>
+              This major release transitions the Mycelium ecosystem from testnet-only to full production capability on the Stellar Public Network (Mainnet). All 5 core singleton smart contracts have been deployed and initialized, and the escrow template is uploaded. The SDK, CLI, Web IDE, and Indexer now seamlessly switch between mainnet and testnet.
+            </P>
+
+            <SectionH3>Smart Contract Deployment Directory</SectionH3>
+            <P>
+              Below is the comprehensive listing of all smart contract addresses deployed across both networks, including the Escrow WASM template hash:
+            </P>
+
+            <div style={{ overflowX: "auto", marginTop: 12, marginBottom: 24 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", color: "rgba(255,255,255,0.75)" }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", textAlign: "left" }}>
+                    <th style={{ padding: "8px 12px", color: "#fff" }}>Contract Name</th>
+                    <th style={{ padding: "8px 12px", color: "#fff" }}>Stellar Testnet ID</th>
+                    <th style={{ padding: "8px 12px", color: "#fff" }}>Stellar Mainnet ID</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                    <td style={{ padding: "8px 12px", fontWeight: "bold" }}>Hive Registry</td>
+                    <td style={{ padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC</td>
+                    <td style={{ padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--accent-cyan)" }}>CCFGTAAVOCU2VQNNQUJQQI3YET27PTM3GADCBYDLA6DISXUPR5CGRS5T</td>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                    <td style={{ padding: "8px 12px", fontWeight: "bold" }}>Job Board</td>
+                    <td style={{ padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>CDASJ42STDU42QXDXH3KRFNQWBURB54XPXV2WBXHWGPBA2BNAI5EYULO</td>
+                    <td style={{ padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--accent-cyan)" }}>CABB4SSGE5NFOCH6KE4RNCA2MGHSQIFXUKS7OZ4B4GQOEJK6R4ZMP4LG</td>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                    <td style={{ padding: "8px 12px", fontWeight: "bold" }}>Memory Anchor</td>
+                    <td style={{ padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>CAC27VKJEPDJJNI36NP7D7VH6WCHT6N5EITKSKPZIQNWA2VPEPBIXJSB</td>
+                    <td style={{ padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--accent-cyan)" }}>CDFXP42NITRLDGYUMJ5OT63EVWBROJTCXQR64GUSDWHY2LH3AQM2TXYP</td>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                    <td style={{ padding: "8px 12px", fontWeight: "bold" }}>Verifier Registry</td>
+                    <td style={{ padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>CBFELTFVBRGR5Y4VHOGFUJLNMMRDNBAOTTZUKZ3SNT625GDB4T76OHMC</td>
+                    <td style={{ padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--accent-cyan)" }}>CA574F2GDVGJSITE52TFON7MA66HB6EC2IVPMXPO5OUWDAPJ5JVCSQHC</td>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                    <td style={{ padding: "8px 12px", fontWeight: "bold" }}>Reputation Registry</td>
+                    <td style={{ padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>CCTJCC5FELB4PSXT3OF4QSFKH456OIVHF3YGY7ABNFH7ITL7XWYBO2NE</td>
+                    <td style={{ padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--accent-cyan)" }}>CB44VUD27BJN4R2VVUONP63TQ5LG523XPV4TKFF7CLC3MQBHI7DYKRBP</td>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                    <td style={{ padding: "8px 12px", fontWeight: "bold" }}>Escrow WASM Template</td>
+                    <td style={{ padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>df39861bdd6a838826acb7fc9d965563ab166d5d15cd83cc9a8671448e0696ee</td>
+                    <td style={{ padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--accent-cyan)" }}>df39861bdd6a838826acb7fc9d965563ab166d5d15cd83cc9a8671448e0696ee</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <SectionH3>Core Enhancements</SectionH3>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>Stellar Mainnet Support:</strong> All 5 core singleton smart contracts deployed, and the Escrow contract template WASM uploaded to Stellar Mainnet.</li>
+              <li><strong>Version Bump:</strong> Metapackage and package dependencies bumped to version <InlineCode>0.5.0</InlineCode>.</li>
+              <li><strong>CLI Flags:</strong> Integrated network flags (<InlineCode>--testnet / -t</InlineCode>, <InlineCode>--mainnet / -m</InlineCode>, and shorthand <InlineCode>-n</InlineCode>) across all primary commands and subcommands.</li>
+              <li><strong>Dynamic IDE:</strong> Bounty board, agent network, and playground pages automatically query the Freighter wallet network and switch RPC endpoints and contract addresses dynamically.</li>
+              <li><strong>Dynamic Business Payee Payout:</strong> Payout fee splitting dynamically routes conditional escrow fees to <InlineCode>myceliummainnet</InlineCode> (`GCT7GPSGA4OQXCN6KYUVDCZY2P4D4QHA5GCPC72XYEN3RRF36NR6D2XX`) on mainnet and <InlineCode>myceliumtestnet</InlineCode> (`GCKYLSBT7VE5XW326LCGV72TZRYDX5WIX3TKCE74GU4WBTVSVUDBPAYR`) on testnet.</li>
+              <li><strong>Network-Aware Indexer:</strong> Firestore scanner refactored to support multi-network scanning cursor configurations.</li>
+            </ul>
+
             <SectionH2 id="v043">Version 0.4.3 — Proof-Layer Provider Expansion & Critique Command Release</SectionH2>
             <P><strong>Released on 2026-07-04</strong></P>
             <P>
@@ -2612,7 +2763,7 @@ mycelium agent reputation --address GABCDEF123...`}
             flexWrap: "wrap", gap: 12,
           }}>
             <span style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.25)", fontFamily: "var(--font-sans)" }}>
-              Mycelium v0.4.0 · Stellar Testnet
+              Mycelium v0.5.0 · Stellar Multi-Network
             </span>
             <div style={{ display: "flex", gap: 20 }}>
               <Link href="/playground" style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.35)", textDecoration: "none" }}>Playground</Link>

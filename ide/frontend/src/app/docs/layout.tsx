@@ -373,7 +373,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
               background: "rgba(139,92,246,0.12)", color: "var(--accent-purple)",
               border: "1px solid rgba(139,92,246,0.25)",
               fontFamily: "var(--font-mono)", letterSpacing: "0.4px",
-            }}>v0.4.0</span>
+            }}>v0.5.0</span>
           </div>
 
           {/* Search */}

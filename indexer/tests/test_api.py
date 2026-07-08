@@ -23,7 +23,7 @@ class _FakeStore:
     def as_of_ledger(self):
         return 12345
 
-    def list_agents(self, capability=None, min_reputation=0, limit=50, start_after=None):
+    def list_agents(self, capability=None, min_reputation=0, limit=50, start_after=None, network=None):
         rows = [a for a in self._agents.values()
                 if (capability is None or capability in a["capability_tags"])
                 and a["reputation"] >= min_reputation]
@@ -32,7 +32,7 @@ class _FakeStore:
     def get_agent(self, name):
         return self._agents.get(name)
 
-    def list_jobs(self, status=None, mode=None, min_bounty=0, limit=50, start_after=None):
+    def list_jobs(self, status=None, mode=None, min_bounty=0, limit=50, start_after=None, network=None):
         rows = [j for j in self._jobs.values()
                 if (status is None or j["status"] == status)
                 and j["bounty"] >= min_bounty]

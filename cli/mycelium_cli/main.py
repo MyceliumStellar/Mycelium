@@ -43,7 +43,7 @@ app.add_typer(verifier_app, name="verifier")
 PASSPHRASE_ENV_VAR = "MYCELIUM_DECRYPT_KEY"
 
 
-__version__ = "0.4.3"
+__version__ = "0.5.0"
 
 
 def _version_callback(value: bool):
@@ -73,6 +73,22 @@ def _resolve_passphrase(label: str, confirm: bool = False) -> str:
     if env_value:
         return env_value
     return typer.prompt(label, hide_input=True, confirmation_prompt=confirm)
+
+
+def _resolve_network(
+    network: str | None,
+    use_testnet: bool = False,
+    use_mainnet: bool = False,
+) -> str | None:
+    """Resolve the effective network from the three flag sources.
+
+    Priority: --mainnet/-m > --testnet/-t > --network/-n value.
+    """
+    if use_mainnet:
+        return "mainnet"
+    if use_testnet:
+        return "testnet"
+    return network
 
 
 def _select_model(framework: str) -> tuple[str, str | None]:
@@ -186,23 +202,29 @@ def check(file: str = typer.Argument(..., help="Python contract file to validate
 
 @app.command()
 def deploy(
-    network: str = typer.Option("testnet", help="testnet or mainnet"),
+    network: str = typer.Option("testnet", "--network", "-n", help="Network: testnet or mainnet"),
+    use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet (default)", is_flag=True),
+    use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wasm: str = typer.Option(None, help="WASM path (defaults to mycelium.toml)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
 ):
     """Deploy the compiled contract to Stellar/Soroban."""
     passphrase = _resolve_passphrase("Wallet passphrase")
-    run_deploy(network=network, wasm_path=wasm, wallet_path=wallet, passphrase=passphrase)
+    net = _resolve_network(network, use_testnet, use_mainnet)
+    run_deploy(network=net, wasm_path=wasm, wallet_path=wallet, passphrase=passphrase)
 
 
 @app.command()
 def register(
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"),
+    use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True),
+    use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
 ):
     """Register the agent's unique name on the Hive Registry."""
     passphrase = _resolve_passphrase("Wallet passphrase")
-    run_register(network=network, wallet_path=wallet, passphrase=passphrase)
+    net = _resolve_network(network, use_testnet, use_mainnet)
+    run_register(network=net, wallet_path=wallet, passphrase=passphrase)
 
 
 @app.command()
@@ -216,7 +238,9 @@ def agent(
 
 @app.command()
 def agents(
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"),
+    use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True),
+    use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     registry: str = typer.Option(None, "--registry", help="Hive Registry contract id override"),
     start_ledger: int = typer.Option(
         None, "--start-ledger", help="First ledger to scan (defaults to the RPC retention horizon)"
@@ -226,38 +250,48 @@ def agents(
     ),
 ):
     """Discover every agent registered on the Hive Registry (read-only, no wallet)."""
+    net = _resolve_network(network, use_testnet, use_mainnet)
     run_discover(
-        network=network, registry=registry, start_ledger=start_ledger, resolve=not no_resolve
+        network=net, registry=registry, start_ledger=start_ledger, resolve=not no_resolve
     )
 
 
 @app.command()
 def resolve(
     name: str = typer.Argument(..., help="Unique agent name to look up"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"),
+    use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True),
+    use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     registry: str = typer.Option(None, "--registry", help="Hive Registry contract id override"),
 ):
     """Resolve a single agent name to its Hive Registry entry (read-only, no wallet)."""
-    run_resolve(name, network=network, registry=registry)
+    net = _resolve_network(network, use_testnet, use_mainnet)
+    run_resolve(name, network=net, registry=registry)
 
 
 @app.command()
 def status(
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"),
+    use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True),
+    use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
 ):
     """Show wallet, balance, network, deploy, and registry state in one screen."""
-    run_status(network=network, wallet_path=wallet)
+    net = _resolve_network(network, use_testnet, use_mainnet)
+    run_status(network=net, wallet_path=wallet)
 
 
 @app.command()
 def fund(
     address: str = typer.Option(None, "--address", help="Address to fund (defaults to project wallet)"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"),
+    use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True),
+    use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
 ):
     """Top up a testnet wallet from Friendbot."""
-    run_fund(address=address, network=network, wallet_path=wallet)
+    net = _resolve_network(network, use_testnet, use_mainnet)
+    run_fund(address=address, network=net, wallet_path=wallet)
 
 
 @app.command()
@@ -265,14 +299,17 @@ def call(
     function_name: str = typer.Argument(..., help="Contract function to invoke"),
     args: list[str] = typer.Argument(None, help="Positional arguments (ints/bools/addresses auto-typed)"),
     contract: str = typer.Option(None, "--contract", help="Contract id (defaults to mycelium.toml)"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"),
+    use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True),
+    use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     send: bool = typer.Option(False, "--send", help="Sign & submit a state-changing tx (default: read-only)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path (only with --send)"),
 ):
     """Invoke a deployed contract function (read-only by default)."""
     passphrase = _resolve_passphrase("Wallet passphrase") if send else None
+    net = _resolve_network(network, use_testnet, use_mainnet)
     run_call(
-        function_name, args=args, contract=contract, network=network,
+        function_name, args=args, contract=contract, network=net,
         send=send, wallet_path=wallet, passphrase=passphrase,
     )
 
@@ -281,31 +318,40 @@ def call(
 def pay(
     recipient: str = typer.Argument(..., help="Registry name or G... address to pay"),
     amount: str = typer.Argument(..., help="Amount of XLM to send"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"),
+    use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True),
+    use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
 ):
     """Send an XLM payment to a registry name or address (M2M settlement)."""
     passphrase = _resolve_passphrase("Wallet passphrase")
-    run_pay(recipient, amount, network=network, wallet_path=wallet, passphrase=passphrase)
+    net = _resolve_network(network, use_testnet, use_mainnet)
+    run_pay(recipient, amount, network=net, wallet_path=wallet, passphrase=passphrase)
 
 
 @app.command()
 def doctor(
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"),
+    use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True),
+    use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
 ):
     """Verify connectivity (hosted compile + RPC; local toolchain optional) and print fixes."""
-    run_doctor(network=network)
+    net = _resolve_network(network, use_testnet, use_mainnet)
+    run_doctor(network=net)
 
 
 @app.command()
 def events(
     contract: str = typer.Option(None, "--contract", help="Contract id (defaults to mycelium.toml)"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"),
+    use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True),
+    use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     start_ledger: int = typer.Option(None, "--start-ledger", help="First ledger to scan"),
     follow: bool = typer.Option(False, "--follow", "-f", help="Stream new events until interrupted"),
 ):
     """Show (or stream with --follow) a contract's on-chain events."""
-    run_events(contract=contract, network=network, start_ledger=start_ledger, follow=follow)
+    net = _resolve_network(network, use_testnet, use_mainnet)
+    run_events(contract=contract, network=net, start_ledger=start_ledger, follow=follow)
 
 
 @app.command()

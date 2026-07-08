@@ -40,14 +40,45 @@ def test_create_locked_escrow_locks_funds(monkeypatch):
     call = ctx.calls[0]
     assert call["contract_id"] == "CESCROWID"
     assert call["function_name"] == "initialize"
-    depositor, provider, token, amount, judge, timeout = call["args"]
+    depositor, provider, token, amount, judge, timeout, fee_bps, fee_collector = call["args"]
     assert depositor == ctx.keypair.public_key
     assert provider == "CPROVIDER"
     assert amount == 15_000_000          # 1.5 XLM in stroops
     assert judge == "GJUDGE"             # the release authority, not a task hash
+    # Fee is off by default (no MYCELIUM_FEE_BPS set); collector is a harmless
+    # placeholder (the depositor) that is never credited when fee_bps == 0.
+    assert fee_bps == 0
+    assert fee_collector == ctx.keypair.public_key
     # Default token is the network's native SAC.
     from mycelium_sdk.constants import native_token_address
     assert token == native_token_address("testnet")
+
+
+def test_protocol_fee_is_passed_and_split_is_net(monkeypatch):
+    """With a fee configured, initialize carries it and a swarm split targets the
+    NET bounty (locked amount minus the protocol fee)."""
+    ctx = _FakeContext()
+    router = EscrowPaymentRouter(ctx)
+    monkeypatch.setattr(router, "_deploy_escrow_instance", lambda: "CESCROWID")
+
+    escrow_id = router.create_locked_escrow(
+        "CPROVIDER", Decimal("10"), "GJUDGE", fee_bps=250, fee_collector="GTREASURY"
+    )
+    _, _, _, amount, _, _, fee_bps, fee_collector = ctx.calls[0]["args"]
+    assert amount == 100_000_000         # 10 XLM
+    assert fee_bps == 250                # 2.5%
+    assert fee_collector == "GTREASURY"
+
+    # A swarm split must sum to NET = amount - fee = 100_000_000 - 2_500_000.
+    ctx.calls.clear()
+    ctx.read_returns = {"get_details": {"amount": 100_000_000, "fee_bps": 250}}
+    router.split_release(escrow_id, [("GA", 6000), ("GB", 4000)], b"\x02" * 32)
+    split_call = ctx.calls[-1]
+    assert split_call["function_name"] == "claim_and_split"
+    _root, recipients, amounts = split_call["args"]
+    assert recipients == ["GA", "GB"]
+    assert sum(amounts) == 97_500_000    # net after the 2.5% fee
+    assert amounts == [58_500_000, 39_000_000]
 
 
 def test_deploy_escrow_instance_uses_pure_python_deploy(monkeypatch):

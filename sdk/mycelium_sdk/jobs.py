@@ -155,7 +155,7 @@ class JobBoardClient:
 
         from mycelium_sdk.constants import native_token_address
 
-        token = token or native_token_address(self.context.network_type)
+        token = token or native_token_address(getattr(self.context, "network_type", "testnet"))
         bounty_stroops = int(bounty * STROOPS_PER_XLM)
         if bounty_stroops <= 0:
             raise ValueError(

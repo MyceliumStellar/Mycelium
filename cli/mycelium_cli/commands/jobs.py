@@ -15,6 +15,7 @@ import sys
 from decimal import Decimal
 
 import typer
+from mycelium_cli.commands import resolve_network
 
 from mycelium_cli.config import get_value
 
@@ -114,9 +115,10 @@ def post(
 @job_app.command("list")
 def list_jobs(
     status: str = typer.Option(None, "--status", help="Filter: open | claimed | submitted | done | cancelled"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """List jobs (read-only, no wallet)."""
     client = _client(network, DEFAULT_WALLET_PATH, board, signing=False)
     jobs = client.list_open_jobs(status=status)
@@ -134,10 +136,11 @@ def list_jobs(
 @job_app.command("claim")
 def claim(
     job_id: int = typer.Argument(..., help="Job id to claim"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Single-agent self-claim of an open job."""
     client = _client(network, wallet, board, signing=True)
     client.claim_job(job_id)
@@ -148,11 +151,12 @@ def claim(
 def assign(
     job_id: int = typer.Argument(..., help="Job id to assign"),
     agent: str = typer.Option(..., "--agent", help="Agent unique name (Hive Registry) or G/C address"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
     registry: str = typer.Option(None, "--registry", help="Hive Registry id override (for name resolution)"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Poster-side: assign a specific agent (by name or address) to an open job."""
     client = _client(network, wallet, board, signing=True)
     agent_addr = _resolve_agent_address(client.context, agent, registry)
@@ -165,10 +169,11 @@ def join(
     job_id: int = typer.Argument(..., help="Job id to join"),
     capability: str = typer.Option(..., "--capability", help="Capability tag you bring to the swarm"),
     share: int = typer.Option(..., "--share", help="Agreed bounty share in basis points (sum to 10000)"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Join a swarm job with an agreed bounty share."""
     if not 0 < share <= 10000:
         typer.echo(f"Error: --share must be between 1 and 10000 basis points (got {share}).")
@@ -183,10 +188,11 @@ def submit(
     job_id: int = typer.Argument(..., help="Job id"),
     evidence: str = typer.Option(..., "--evidence", help="Deliverable file/string; its SHA-256 is anchored as the evidence_root"),
     uri: str = typer.Option("", "--uri", help="Optional pointer to the full bundle (recorded on-chain)"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Agent wallet path"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Agent: anchor a pre-made deliverable's evidence on-chain (manual alternative to `do`)."""
     client = _client(network, wallet, board, signing=True)
     client.submit_evidence(job_id, _evidence_root(evidence), uri)
@@ -199,10 +205,11 @@ def do_job(
     model: str = typer.Option(..., "--model", help="The agent's model 'provider:model' (nvidia/groq)"),
     claim: bool = typer.Option(True, "--claim/--no-claim", help="Self-claim the job first (single mode)"),
     no_revise: bool = typer.Option(False, "--no-revise", help="Single pass (skip the self-review pass)"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Agent wallet path"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Agent: read the job from chain, do the actual work with your model, and submit real evidence."""
     client = _client(network, wallet, board, signing=True)
     try:
@@ -219,10 +226,11 @@ def do_job(
 def judge_job(
     job_id: int = typer.Argument(..., help="Job id to judge"),
     deliverable: str = typer.Option(..., "--deliverable", help="The deliverable text/file to score (what the agent produced)"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Judge wallet path"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Judge: run the panel the JOB prescribes (from its on-chain spec) over the deliverable, record the score, and settle."""
     from mycelium_sdk.proof.evidence import EvidenceBundle, Artifact, Claim
 
@@ -251,10 +259,11 @@ def verdict(
     evidence: str = typer.Option(..., "--evidence", help="The same evidence bundle file/string the worker submitted"),
     passed: bool = typer.Option(None, "--pass/--fail", help="Whether the deliverable met the checks"),
     score: int = typer.Option(None, "--score", help="Numeric score 0-100 to record (defaults 100 on pass, 0 on fail)"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Judge wallet path"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Judge: manually record a verdict (+score) and, on a pass, release the bounty. (Use `judge` for the LLM panel.)"""
     if passed is None:
         typer.echo("Error: specify --pass or --fail.")
@@ -271,10 +280,11 @@ def verdict(
 @job_app.command("finalize")
 def finalize(
     job_id: int = typer.Argument(..., help="Job id"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Poster wallet path"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Poster: close the record of a verified job (the bounty is already released)."""
     client = _client(network, wallet, board, signing=True)
     client.finalize(job_id)
@@ -284,9 +294,10 @@ def finalize(
 @job_app.command("status")
 def status(
     job_id: int = typer.Argument(..., help="Job id"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Show a job's full on-chain detail — title, description, checks, chosen panel, score — plus escrow/claimants."""
     import json as _json
 

@@ -26,6 +26,15 @@ import {
   Users
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
+import {
+  CONTRACT_ADDRESSES,
+  SOROBAN_RPC_URLS,
+  HORIZON_URLS,
+  STELLAR_EXPERT_URLS,
+  NATIVE_SAC_ADDRESSES,
+  detectNetwork,
+  type NetworkType,
+} from "../network-config";
 
 interface Job {
   id: number;
@@ -43,8 +52,10 @@ interface Job {
   description: string;
 }
 
-const JOB_BOARD_ADDRESS = "CDASJ42STDU42QXDXH3KRFNQWBURB54XPXV2WBXHWGPBA2BNAI5EYULO";
-const HIVE_REGISTRY_ADDRESS = "CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC";
+// Per-network contract addresses — derived from wallet network.
+// Default to testnet; the loadJobs / CreateBountyModal paths select the
+// correct addresses based on the connected Freighter network.
+const DEFAULT_NETWORK: NetworkType = "testnet";
 
 // Hosted off-chain indexer — O(1) discovery. The board reads from it first and
 // falls back to direct on-chain simulation when it's empty/unreachable.
@@ -112,11 +123,15 @@ export default function BountyBoard() {
   const [walletConnected, setWalletConnected] = useState(false);
   const [walletAddress, setWalletAddress] = useState("");
   const [walletNetwork, setWalletNetwork] = useState("");
+  const [activeNetwork, setActiveNetwork] = useState<NetworkType>(DEFAULT_NETWORK);
+
+  const JOB_BOARD_ADDRESS = CONTRACT_ADDRESSES[activeNetwork].job_board;
+  const HIVE_REGISTRY_ADDRESS = CONTRACT_ADDRESSES[activeNetwork].hive_registry;
 
   const loadJobsOnChain = async (): Promise<Job[]> => {
     try {
       const StellarSdk = await import("@stellar/stellar-sdk");
-      const rpcUrl = "https://soroban-testnet.stellar.org";
+      const rpcUrl = SOROBAN_RPC_URLS[activeNetwork];
       const server = new StellarSdk.rpc.Server(rpcUrl);
 
       // Simulated dummy account for read-only simulations
@@ -128,7 +143,7 @@ export default function BountyBoard() {
       try {
         const txCount = new StellarSdk.TransactionBuilder(source, {
           fee: "100",
-          networkPassphrase: StellarSdk.Networks.TESTNET
+          networkPassphrase: activeNetwork === "mainnet" ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET
         })
           .addOperation(StellarSdk.Operation.invokeContractFunction({
             contract: JOB_BOARD_ADDRESS,
@@ -153,7 +168,7 @@ export default function BountyBoard() {
         try {
           const txJob = new StellarSdk.TransactionBuilder(source, {
             fee: "100",
-            networkPassphrase: StellarSdk.Networks.TESTNET
+            networkPassphrase: activeNetwork === "mainnet" ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET
           })
             .addOperation(StellarSdk.Operation.invokeContractFunction({
               contract: JOB_BOARD_ADDRESS,
@@ -201,7 +216,7 @@ export default function BountyBoard() {
               try {
                 const txSwarm = new StellarSdk.TransactionBuilder(source, {
                   fee: "100",
-                  networkPassphrase: StellarSdk.Networks.TESTNET
+                  networkPassphrase: activeNetwork === "mainnet" ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET
                 })
                   .addOperation(StellarSdk.Operation.invokeContractFunction({
                     contract: JOB_BOARD_ADDRESS,
@@ -224,7 +239,7 @@ export default function BountyBoard() {
               try {
                 const txShares = new StellarSdk.TransactionBuilder(source, {
                   fee: "100",
-                  networkPassphrase: StellarSdk.Networks.TESTNET
+                  networkPassphrase: activeNetwork === "mainnet" ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET
                 })
                   .addOperation(StellarSdk.Operation.invokeContractFunction({
                     contract: JOB_BOARD_ADDRESS,
@@ -247,7 +262,7 @@ export default function BountyBoard() {
 
             // Parse title & description from specStr or use standard description/fallbacks
             let title = titleStr || `On-Chain Bounty #${i}`;
-            let description = descriptionStr || `Sovereign Job #${i} coordination pipeline. Deployed on Stellar Testnet, locking a bounty of ${Number(bountyStroops) / 10000000} XLM. Payout release requires a valid cryptographic proof submitted to escrow contract ${escrow.slice(0, 10)}...${escrow.slice(-6)}.`;
+            let description = descriptionStr || `Sovereign Job #${i} coordination pipeline. Deployed on Stellar ${activeNetwork === "mainnet" ? "Mainnet" : "Testnet"}, locking a bounty of ${Number(bountyStroops) / 10000000} XLM. Payout release requires a valid cryptographic proof submitted to escrow contract ${escrow.slice(0, 10)}...${escrow.slice(-6)}.`;
 
             try {
               if (specStr) {
@@ -297,13 +312,19 @@ export default function BountyBoard() {
   // members/shares come from the per-job endpoint.
   const loadJobsFromIndexer = async (): Promise<Job[] | null> => {
     try {
-      const res = await fetch(`${INDEXER_URL}/jobs?limit=100`, {
+      const res = await fetch(`${INDEXER_URL}/jobs?network=${activeNetwork}&limit=100`, {
         signal: AbortSignal.timeout(6000),
       });
       if (!res.ok) return null;
       const data = await res.json();
-      const list = Array.isArray(data?.jobs) ? data.jobs : null;
-      if (!list) return null;
+      const rawList = Array.isArray(data?.jobs) ? data.jobs : null;
+      if (!rawList || rawList.length === 0) return null;
+
+      const list = rawList.filter((j: any) => {
+        const net = j.network || "testnet";
+        return net === activeNetwork;
+      });
+      if (list.length === 0) return null;
 
       const mapped: Job[] = [];
       for (const j of list) {
@@ -361,6 +382,7 @@ export default function BountyBoard() {
         setWalletConnected(true);
         const netRes = await freighter.getNetwork();
         setWalletNetwork(netRes.network || "TESTNET");
+        setActiveNetwork(detectNetwork(netRes.network || "TESTNET"));
         toast.success("Wallet connected!");
       }
     } catch (err: any) {
@@ -370,6 +392,9 @@ export default function BountyBoard() {
 
   useEffect(() => {
     loadJobs();
+  }, [activeNetwork]);
+
+  useEffect(() => {
     // Auto-check Freighter access if already logged in
     const checkExisting = async () => {
       try {
@@ -382,6 +407,7 @@ export default function BountyBoard() {
             setWalletConnected(true);
             const netRes = await freighter.getNetwork();
             setWalletNetwork(netRes.network || "TESTNET");
+            setActiveNetwork(detectNetwork(netRes.network || "TESTNET"));
           }
         }
       } catch (_) {}
@@ -494,13 +520,39 @@ export default function BountyBoard() {
             >docs</Link>
           </nav>
 
-          <Link href="/playground" className="premium-button-primary" style={{
-            padding: "7px 16px",
-            fontSize: "0.76rem",
-            borderRadius: "6px"
-          }}>
-            Launch Playground
-          </Link>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {/* Network Selector Toggle */}
+            <button
+              onClick={() => {
+                const nextNet = activeNetwork === "testnet" ? "mainnet" : "testnet";
+                setActiveNetwork(nextNet);
+              }}
+              style={{
+                background: "rgba(255, 255, 255, 0.04)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: "6px",
+                padding: "7px 12px",
+                fontSize: "0.76rem",
+                color: activeNetwork === "mainnet" ? "#f43f5e" : "var(--accent-cyan)",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                transition: "all 0.2s"
+              }}
+            >
+              <Network size={12} />
+              <span>{activeNetwork === "mainnet" ? "Mainnet" : "Testnet"}</span>
+            </button>
+
+            <Link href="/playground" className="premium-button-primary" style={{
+              padding: "7px 16px",
+              fontSize: "0.76rem",
+              borderRadius: "6px"
+            }}>
+              Launch Playground
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -637,19 +689,42 @@ export default function BountyBoard() {
               color: "rgba(255, 255, 255, 0.4)",
               letterSpacing: "1.5px",
               display: "block",
-              marginBottom: "4px"
+              marginBottom: "8px"
             }}>
-              ACTIVE JOB BOARD CONTRACT ADDRESS
+              ON-CHAIN JOB BOARD ADDRESSES
             </span>
-            <span style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "clamp(0.75rem, 2vw, 0.95rem)",
-              color: "var(--accent-cyan)",
-              fontWeight: 500,
-              letterSpacing: "0.5px"
-            }}>
-              {JOB_BOARD_ADDRESS}
-            </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{
+                  fontSize: "0.62rem", padding: "1px 6px", borderRadius: 3,
+                  background: activeNetwork === "testnet" ? "rgba(0,150,199,0.2)" : "rgba(255,255,255,0.04)",
+                  color: activeNetwork === "testnet" ? "var(--accent-cyan)" : "rgba(255,255,255,0.3)",
+                  fontFamily: "var(--font-mono)", fontWeight: "bold"
+                }}>TESTNET</span>
+                <span style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.8rem",
+                  color: activeNetwork === "testnet" ? "#ffffff" : "rgba(255,255,255,0.4)"
+                }}>
+                  {CONTRACT_ADDRESSES.testnet.job_board}
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{
+                  fontSize: "0.62rem", padding: "1px 6px", borderRadius: 3,
+                  background: activeNetwork === "mainnet" ? "rgba(244,63,94,0.2)" : "rgba(255,255,255,0.04)",
+                  color: activeNetwork === "mainnet" ? "#f43f5e" : "rgba(255,255,255,0.3)",
+                  fontFamily: "var(--font-mono)", fontWeight: "bold"
+                }}>MAINNET</span>
+                <span style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.8rem",
+                  color: activeNetwork === "mainnet" ? "#ffffff" : "rgba(255,255,255,0.4)"
+                }}>
+                  {CONTRACT_ADDRESSES.mainnet.job_board}
+                </span>
+              </div>
+            </div>
           </div>
           <div style={{ display: "flex", gap: "10px" }}>
             <button 
@@ -791,7 +866,7 @@ export default function BountyBoard() {
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
                   <RefreshCw size={36} className="animate-spin" style={{ color: "var(--accent-cyan)" }} />
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem", color: "rgba(255,255,255,0.4)" }}>
-                    Querying Soroban Testnet RPC...
+                    Querying Soroban {activeNetwork === "mainnet" ? "Mainnet" : "Testnet"} RPC...
                   </span>
                 </div>
               ) : selectedJob ? (
@@ -1290,7 +1365,7 @@ export default function BountyBoard() {
                 {/* Actions */}
                 <div style={{ display: "flex", gap: "10px", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "20px" }}>
                   <a 
-                    href={`https://horizon-testnet.stellar.org/accounts/${selectedJob.escrow}`}
+                    href={`${HORIZON_URLS[activeNetwork]}/accounts/${selectedJob.escrow}`}
                     target="_blank" 
                     rel="noopener noreferrer" 
                     className="premium-button-primary"
@@ -1305,7 +1380,7 @@ export default function BountyBoard() {
                     Inspect Escrow Ledger
                   </a>
                   <a 
-                    href={`https://horizon-testnet.stellar.org/accounts/${JOB_BOARD_ADDRESS}`}
+                    href={`${HORIZON_URLS[activeNetwork]}/accounts/${JOB_BOARD_ADDRESS}`}
                     target="_blank" 
                     rel="noopener noreferrer" 
                     className="premium-button-secondary"
@@ -1488,6 +1563,9 @@ interface CreateBountyModalProps {
 }
 
 function CreateBountyModal({ walletAddress, walletNetwork, onClose }: CreateBountyModalProps) {
+  const activeNet = detectNetwork(walletNetwork || "TESTNET");
+  const JOB_BOARD_ADDRESS = CONTRACT_ADDRESSES[activeNet].job_board;
+
   const [step, setStep] = useState(1);
   const [jobTitle, setJobTitle] = useState("");
   const [jobDescription, setJobDescription] = useState("");
@@ -1495,7 +1573,7 @@ function CreateBountyModal({ walletAddress, walletNetwork, onClose }: CreateBoun
 
   const [bountyXlm, setBountyXlm] = useState("10");
   const [deadlineSeconds, setDeadlineSeconds] = useState("86400"); // 24 hours
-  const [tokenAddress, setTokenAddress] = useState("CAS3KPT76XQ4NCJ7GD43W57KQC7N6F72M7U72M7U72M7U72M7U72MSAC"); // Testnet native XLM token address fallback
+  const [tokenAddress, setTokenAddress] = useState(NATIVE_SAC_ADDRESSES[activeNet]);
 
   // Execution states
   const [postingProgress, setPostingProgress] = useState<{
@@ -1663,14 +1741,24 @@ function CreateBountyModal({ walletAddress, walletNetwork, onClose }: CreateBoun
       const amountStroops = BigInt(Math.floor(parseFloat(bountyXlm) * 10000000));
       const textEncoder = new TextEncoder();
       
-      // args: depositor, provider, token, amount, judge, timeout_seconds
+      // Protocol take-rate skimmed on release (basis points). 0 = fee off. To
+      // monetize, set PROTOCOL_FEE_BPS > 0 and PROTOCOL_FEE_COLLECTOR to the
+      // treasury account; the escrow hard-caps this at 1000 bps (10%) on-chain.
+      const PROTOCOL_FEE_BPS = 0;
+      const PROTOCOL_FEE_COLLECTOR = detectNetwork(walletNetwork || "TESTNET") === "mainnet"
+        ? "GCT7GPSGA4OQXCN6KYUVDCZY2P4D4QHA5GCPC72XYEN3RRF36NR6D2XX"
+        : "GCKYLSBT7VE5XW326LCGV72TZRYDX5WIX3TKCE74GU4WBTVSVUDBPAYR";
+
+      // args: depositor, provider, token, amount, judge, timeout_seconds, fee_bps, fee_collector
       const initArgs = [
         StellarSdk.Address.fromString(walletAddress).toScVal(),
         StellarSdk.Address.fromString(walletAddress).toScVal(), // placeholder provider is poster
         StellarSdk.Address.fromString(tokenAddress).toScVal(),
         StellarSdk.nativeToScVal(amountStroops, { type: "i128" }),
         StellarSdk.Address.fromString(walletAddress).toScVal(), // judge is the poster/user
-        StellarSdk.nativeToScVal(BigInt(deadlineSeconds), { type: "u64" })
+        StellarSdk.nativeToScVal(BigInt(deadlineSeconds), { type: "u64" }),
+        StellarSdk.nativeToScVal(BigInt(PROTOCOL_FEE_BPS), { type: "i128" }),
+        StellarSdk.Address.fromString(PROTOCOL_FEE_COLLECTOR).toScVal()
       ];
 
       let txInit = new StellarSdk.TransactionBuilder(sourceAccount, { fee: "1000000", networkPassphrase })
@@ -2081,7 +2169,7 @@ function CreateBountyModal({ walletAddress, walletNetwork, onClose }: CreateBoun
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "0.75rem", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.6)" }}>
                   <div>Job ID: #{postingProgress.jobId}</div>
                   <div>Escrow Contract: {postingProgress.escrowId?.slice(0, 12)}...{postingProgress.escrowId?.slice(-6)}</div>
-                  <div style={{ color: "rgba(255,255,255,0.3)" }}>All transactions successfully committed to Soroban Testnet.</div>
+                  <div style={{ color: "rgba(255,255,255,0.3)" }}>All transactions successfully committed to Soroban {activeNet === "mainnet" ? "Mainnet" : "Testnet"}.</div>
                 </div>
               </div>
             )}

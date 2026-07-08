@@ -312,6 +312,15 @@ with a sidebar layout
 Features: Ctrl+K search, scrollspy TOC, previous/next page navigation,
 copy-to-clipboard code blocks, callout components (info/warn/tip).
 
+## Release 0.5.0 — Stellar Mainnet & Multi-Network IDE Support
+
+Version `0.5.0` upgrades the Web IDE to a fully network-aware platform, allowing co-existence and targeting of both Stellar Testnet and Stellar Mainnet:
+
+* **Manual Network Selector:** The Agent Directory and Bounty Board pages now feature a manual toggle button in their headers to select the active network (`Testnet` or `Mainnet`).
+* **Coexistent Address Display:** Contract ID cards on the Agent Directory and Bounty Board pages now display both Stellar Testnet and Stellar Mainnet addresses.
+* **Dynamic Freighter Wallet Binding:** The IDE parses Freighter's reported connected network type (`"TESTNET"` or `"PUBLIC"`) via the `detectNetwork()` helper, dynamically updating contract targets.
+* **Indexer Network Isolation:** Frontend indexer queries to `/agents` and `/jobs` now append the `?network=<network>` parameter, ensuring that the IDE partitions and shows only the relevant testnet or mainnet records depending on the selected active network.
+
 ---
 
 ## 🔗 Related Docs

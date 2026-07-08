@@ -24,6 +24,7 @@ import os
 from typing import List, Optional
 
 import typer
+from mycelium_cli.commands import resolve_network
 
 from mycelium_cli.config import get_value
 
@@ -78,9 +79,10 @@ def remember(
     tags: List[str] = typer.Option(None, "--tag", "-t", help="Tag(s) for the memory (repeatable)"),
     backend: str = typer.Option("local", "--backend", help="local or supermemory"),
     anchor: str = typer.Option(None, "--anchor", help="MemoryAnchor contract id override"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path (identifies the memory owner)"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Store a memory off-chain (no transaction)."""
     mem = _backend_owner(network, wallet, backend, anchor, signing=True)
     rid = mem.remember(content, list(tags) if tags else None)
@@ -92,9 +94,10 @@ def recall(
     query: str = typer.Argument(..., help="What to search memory for"),
     k: int = typer.Option(5, "-k", help="Number of results"),
     backend: str = typer.Option("local", "--backend", help="local or supermemory"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path (identifies the memory owner)"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Search off-chain memory (no transaction)."""
     mem = _backend_owner(network, wallet, backend, None, signing=True)
     hits = mem.recall(query, k=k)
@@ -114,9 +117,10 @@ def anchor(
     publish: str = typer.Option(None, "--publish", help="Write the canonical blob to this file and anchor file://<path>"),
     backend: str = typer.Option("local", "--backend", help="local or supermemory"),
     anchor: str = typer.Option(None, "--anchor", help="MemoryAnchor contract id override"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Checkpoint: commit the memory root (+uri) on-chain, bumping the version."""
     mem = _backend_owner(network, wallet, backend, anchor, signing=True)
 
@@ -146,9 +150,10 @@ def anchor(
 def verify(
     backend: str = typer.Option("local", "--backend", help="local or supermemory"),
     anchor: str = typer.Option(None, "--anchor", help="MemoryAnchor contract id override"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Recompute the local root and compare to the on-chain anchor."""
     mem = _backend_owner(network, wallet, backend, anchor, signing=True)
     onchain = mem.get_anchor()
@@ -168,9 +173,10 @@ def verify(
 def rehydrate(
     backend: str = typer.Option("local", "--backend", help="local or supermemory"),
     anchor: str = typer.Option(None, "--anchor", help="MemoryAnchor contract id override"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """On a fresh machine: read the anchor, fetch the blob, verify the root, and load."""
     mem = _backend_owner(network, wallet, backend, anchor, signing=True)
     try:
@@ -185,9 +191,10 @@ def rehydrate(
 def status(
     backend: str = typer.Option("local", "--backend", help="local or supermemory"),
     anchor: str = typer.Option(None, "--anchor", help="MemoryAnchor contract id override"),
-    network: str = typer.Option(None, help="testnet or mainnet (defaults to mycelium.toml)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Show local memory count and the on-chain anchor (version/root/uri)."""
     mem = _backend_owner(network, wallet, backend, anchor, signing=True)
     typer.echo(f"owner:    {mem.owner}")

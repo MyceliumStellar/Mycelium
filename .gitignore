@@ -74,4 +74,5 @@ scratchbook/
 pitch/
 vision/
 
-
+# Local developer wallet/configs
+.mycelium/

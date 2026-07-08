@@ -67,29 +67,29 @@ class IndexerWorker:
         contract_ids: Dict[str, str],
         resolve_agent: Optional[Callable[[str], Dict[str, Any]]] = None,
         resolve_job: Optional[Callable[[int], Dict[str, Any]]] = None,
+        network: str = "testnet",
     ):
         self.db = db
         self.rpc = rpc
-        # {"registry": C..., "job_board": C..., optional "escrows": [...]}
         self.contract_ids = contract_ids
         self._resolve_agent = resolve_agent
         self._agent_cache: Dict[str, Dict[str, Any]] = {}
-        # resolve_job(job_id) -> full get_job dict; called once per new job to
-        # capture the immutable fields the `job_posted` event omits (token, mode,
-        # escrow, deadline). Enriched job ids are cached for the process.
         self._resolve_job = resolve_job
         self._job_enriched: set = set()
+        self.network = network
 
     # ── cursor ────────────────────────────────────────────────────────────────
     def _load_cursor(self) -> Optional[int]:
-        snap = self.db.collection(CURSOR_COLLECTION).document(CURSOR_DOC).get()
+        cursor_doc = f"cursor_{self.network}"
+        snap = self.db.collection(CURSOR_COLLECTION).document(cursor_doc).get()
         if getattr(snap, "exists", False):
             data = snap.to_dict() or {}
             return data.get("last_ledger")
         return None
 
     def _save_cursor(self, last_ledger: int, last_event_id: Optional[str]) -> None:
-        self.db.collection(CURSOR_COLLECTION).document(CURSOR_DOC).set(
+        cursor_doc = f"cursor_{self.network}"
+        self.db.collection(CURSOR_COLLECTION).document(cursor_doc).set(
             {"last_ledger": last_ledger, "last_event_id": last_event_id}
         )
 
@@ -181,6 +181,7 @@ class IndexerWorker:
                 doc[key] = details[key]
         if "capability_tags" not in doc:
             doc.setdefault("capability_tags", [])
+        doc["network"] = self.network
         ref = self.db.collection("agents").document(name)
         if not getattr(ref.get(), "exists", False):
             doc["first_seen_ledger"] = rec.get("ledger")
@@ -210,17 +211,19 @@ class IndexerWorker:
             except Exception:
                 pass
             self._job_enriched.add(job_id)
+        doc["network"] = self.network
         self.db.collection("jobs").document(str(job_id)).set(doc, merge=True)
 
     def _upsert_job_status(self, rec: Dict[str, Any]) -> None:
         doc: Dict[str, Any] = {"status": rec["status"], "last_update_ledger": rec.get("ledger")}
         if rec.get("agent") is not None:
             doc["agent"] = rec["agent"]
+        doc["network"] = self.network
         self.db.collection("jobs").document(str(rec["job_id"])).set(doc, merge=True)
 
     def _upsert_swarm(self, rec: Dict[str, Any]) -> None:
         job_ref = self.db.collection("jobs").document(str(rec["job_id"]))
-        job_ref.set({"status": "claimed", "mode": "swarm"}, merge=True)
+        job_ref.set({"status": "claimed", "mode": "swarm", "network": self.network}, merge=True)
         if rec.get("agent"):
             job_ref.collection("members").document(rec["agent"]).set(
                 {"share_bps": rec.get("share_bps")}, merge=True
@@ -239,6 +242,7 @@ class IndexerWorker:
                     "owner": rec["owner"],
                     "version": rec.get("version"),
                     "last_anchor_ledger": rec.get("ledger"),
+                    "network": self.network,
                 },
                 merge=True,
             )
@@ -253,6 +257,7 @@ class IndexerWorker:
                 "counterparty": rec.get("counterparty"),
                 "count": rec.get("count"),
                 "ledger": rec.get("ledger"),
+                "network": self.network,
             }
         )
 
@@ -260,7 +265,7 @@ class IndexerWorker:
 def build_default_worker(network: str = "testnet") -> IndexerWorker:
     """Wire a worker against the live RPC + Firestore using SDK defaults."""
     from mycelium_sdk import AgentContext, HiveClient
-    from mycelium_sdk.constants import HIVEMIND_REGISTRY_ADDRESS, MEMORY_ANCHOR_ADDRESS
+    from mycelium_sdk.constants import contract_address
     from indexer.firestore_client import get_firestore
 
     ctx = AgentContext.read_only(network_type=network)
@@ -283,13 +288,14 @@ def build_default_worker(network: str = "testnet") -> IndexerWorker:
             return jobs.get_job(job_id)
 
     contracts = {
-        "registry": HIVEMIND_REGISTRY_ADDRESS,
+        "registry": contract_address("hive_registry", network),
         "job_board": board,
-        "memory_anchor": os.getenv("MYCELIUM_MEMORY_ANCHOR_ADDRESS") or MEMORY_ANCHOR_ADDRESS,
+        "memory_anchor": os.getenv("MYCELIUM_MEMORY_ANCHOR_ADDRESS") or contract_address("memory_anchor", network),
     }
     return IndexerWorker(
         get_firestore(), ctx.soroban_rpc, contracts,
         resolve_agent=_resolve, resolve_job=resolve_job,
+        network=network,
     )
 
 

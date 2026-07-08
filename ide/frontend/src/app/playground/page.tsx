@@ -11,6 +11,10 @@ import {
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { CONTRACT_TEMPLATES, TEMPLATE_CATEGORIES } from "../../data/contractTemplates";
+import {
+  CONTRACT_ADDRESSES,
+  detectNetwork,
+} from "../network-config";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -1554,7 +1558,8 @@ export default function Playground() {
   // Register the freshly-deployed agent on the Hive Registry (creation-mode
   // final step). Invokes register_agent via Freighter, mirroring the SDK's
   // HiveClient.register / `mycelium register`. unique_name = the repo name.
-  const HIVE_REGISTRY_ADDRESS = "CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC";
+  const activeNet = detectNetwork(walletNetwork || "TESTNET");
+  const HIVE_REGISTRY_ADDRESS = CONTRACT_ADDRESSES[activeNet].hive_registry;
   const handleRegisterAgent = async () => {
     if (!isWalletConnected || !walletAddress) {
       toast.error("Connect Freighter first to register.");

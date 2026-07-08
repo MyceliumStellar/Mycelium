@@ -502,6 +502,14 @@ Docker build, Render deployment (Blueprint + manual), and free-tier workarounds.
 - `POST /agents/{name}/capabilities` with wrong tags → rejected (400).
 - `POST /admin/ingest` without `X-Ingest-Token` → rejected (403).
 
+## Release 0.5.0 — Stellar Mainnet Indexing & Network Partitioning
+
+Version `0.5.0` upgrades the indexer to support indexing events from either Stellar Testnet or Stellar Mainnet, keeping records safely isolated within the same database:
+
+* **Cursor Partitioning:** The cursor document ID is dynamically computed as `cursor_{network}` (e.g. `cursor_testnet` and `cursor_mainnet`) under `indexer_meta`. This ensures that backfills and tails on testnet do not interfere with mainnet logs.
+* **Database Document Partitioning:** Every ingested document (agents, jobs, settlements, and memory anchors) is tagged with a `"network"` field (either `"testnet"` or `"mainnet"`).
+* **API Route Filtering:** The `GET /agents` and `GET /jobs` endpoints support a `network` query parameter (e.g. `/agents?network=mainnet` or `/jobs?network=testnet`). When provided, results are filtered to return entries only from the requested network, enabling the Web IDE frontend to partition agent directory and job board displays completely.
+
 ---
 
 ## Related docs

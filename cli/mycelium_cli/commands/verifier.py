@@ -14,6 +14,7 @@ import os
 from decimal import Decimal
 
 import typer
+from mycelium_cli.commands import resolve_network
 
 from mycelium_cli.config import get_value
 
@@ -55,9 +56,10 @@ def _client(network, wallet, registry, *, signing):
 def register(
     tags: str = typer.Option(..., "--tags", help="Model families you run, e.g. 'nvidia:deepseek-ai/deepseek-v4-pro,groq:llama-3.3-70b-versatile'"),
     endpoint: str = typer.Option("", "--endpoint", help="Optional public endpoint"),
-    network: str = typer.Option(None), wallet: str = typer.Option(DEFAULT_WALLET_PATH),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True), wallet: str = typer.Option(DEFAULT_WALLET_PATH),
     registry: str = typer.Option(None, "--registry"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Announce judging capability."""
     _client(network, wallet, registry, signing=True).register(tags, endpoint)
     typer.echo("✓ Registered as a verifier.")
@@ -66,9 +68,10 @@ def register(
 @verifier_app.command("stake")
 def stake(
     amount: str = typer.Argument(..., help="XLM to bond"),
-    network: str = typer.Option(None), wallet: str = typer.Option(DEFAULT_WALLET_PATH),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True), wallet: str = typer.Option(DEFAULT_WALLET_PATH),
     registry: str = typer.Option(None, "--registry"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Lock an XLM bond (adds to existing stake)."""
     _client(network, wallet, registry, signing=True).stake(Decimal(amount))
     typer.echo(f"✓ Staked {amount} XLM.")
@@ -77,8 +80,9 @@ def stake(
 @verifier_app.command("info")
 def info(
     judge: str = typer.Argument(..., help="Judge address (G…)"),
-    network: str = typer.Option(None), registry: str = typer.Option(None, "--registry"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True), registry: str = typer.Option(None, "--registry"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Show a judge's stake, model tags, and accuracy (read-only)."""
     c = _client(network, DEFAULT_WALLET_PATH, registry, signing=False)
     g = c.get(judge)
@@ -90,18 +94,20 @@ def info(
 
 @verifier_app.command("eligible")
 def eligible(
-    judge: str = typer.Argument(...), network: str = typer.Option(None),
+    judge: str = typer.Argument(...), network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     registry: str = typer.Option(None, "--registry"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Whether a judge is bonded enough to sit on panels."""
     typer.echo(_client(network, DEFAULT_WALLET_PATH, registry, signing=False).is_eligible(judge))
 
 
 @verifier_app.command("request-unstake")
 def request_unstake(
-    network: str = typer.Option(None), wallet: str = typer.Option(DEFAULT_WALLET_PATH),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True), wallet: str = typer.Option(DEFAULT_WALLET_PATH),
     registry: str = typer.Option(None, "--registry"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Begin the unbonding period before withdrawing your stake."""
     _client(network, wallet, registry, signing=True).request_unstake()
     typer.echo("✓ Unbonding started; withdraw after the delay.")
@@ -109,9 +115,10 @@ def request_unstake(
 
 @verifier_app.command("withdraw")
 def withdraw(
-    network: str = typer.Option(None), wallet: str = typer.Option(DEFAULT_WALLET_PATH),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True), wallet: str = typer.Option(DEFAULT_WALLET_PATH),
     registry: str = typer.Option(None, "--registry"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Reclaim your (possibly slashed) stake after unbonding."""
     _client(network, wallet, registry, signing=True).withdraw()
     typer.echo("✓ Withdrew stake.")
@@ -122,9 +129,10 @@ def slash(
     judge: str = typer.Argument(...),
     amount: str = typer.Option(..., "--amount", help="XLM to slash"),
     reason: str = typer.Option("outlier", "--reason"),
-    network: str = typer.Option(None), wallet: str = typer.Option(DEFAULT_WALLET_PATH),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True), wallet: str = typer.Option(DEFAULT_WALLET_PATH),
     registry: str = typer.Option(None, "--registry"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Market only: cut a judge's stake (outlier/no-show verdict)."""
     _client(network, wallet, registry, signing=True).slash(judge, Decimal(amount), reason)
     typer.echo(f"✓ Slashed {amount} XLM from {judge[:10]}… ({reason}).")
@@ -134,9 +142,10 @@ def slash(
 def accuracy(
     judge: str = typer.Argument(...),
     agreed: bool = typer.Option(..., "--agreed/--disagreed", help="Did the judge track the panel median?"),
-    network: str = typer.Option(None), wallet: str = typer.Option(DEFAULT_WALLET_PATH),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True), wallet: str = typer.Option(DEFAULT_WALLET_PATH),
     registry: str = typer.Option(None, "--registry"),
 ):
+    network = resolve_network(network, use_testnet, use_mainnet)
     """Market only: record whether a judge's verdict tracked the median (verifier reputation)."""
     _client(network, wallet, registry, signing=True).record_accuracy(judge, agreed)
     typer.echo(f"✓ Recorded accuracy ({'agreed' if agreed else 'disagreed'}) for {judge[:10]}….")

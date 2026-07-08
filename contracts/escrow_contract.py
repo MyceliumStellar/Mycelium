@@ -40,6 +40,13 @@ class ContractError:
     INVALID_PROOF = 4
     NOT_EXPIRED = 5
     BAD_SPLIT = 6
+    FEE_TOO_HIGH = 7
+
+
+# Protocol fee ceiling (basis points). A depositor authorizes `initialize`, so
+# they consent to the fee — but the contract still hard-caps it so a buggy or
+# malicious caller can never skim more than 10% of a worker's bounty.
+MAX_FEE_BPS = 1000
 
 
 @contract
@@ -57,16 +64,28 @@ class Escrow:
         amount: I128,
         judge: Address,
         timeout: U64,
+        fee_bps: I128,
+        fee_collector: Address,
     ) -> Bool:
         """
         Lock `amount` of `token` from `depositor`, payable to `provider` (or a
         swarm via `claim_and_split`) once `judge` authorizes release on a passing
         verdict. `timeout` seconds after creation the depositor may refund
         instead. Reverts if already initialized.
+
+        `fee_bps` is the protocol take-rate in basis points (e.g. 250 = 2.5%),
+        skimmed to `fee_collector` on release only — refunds pay no fee. Set
+        `fee_bps = 0` to disable the fee (testnet / fee-free deployments). The
+        fee is capped at `MAX_FEE_BPS` so a worker's payout can never be gutted.
         """
         depositor.require_auth()
         if self.storage.get("init", False):
             raise ContractError.ALREADY_INITIALIZED
+
+        if fee_bps < I128(0):
+            raise ContractError.FEE_TOO_HIGH
+        if fee_bps > I128(MAX_FEE_BPS):
+            raise ContractError.FEE_TOO_HIGH
 
         # Pull the locked funds from the depositor into this contract.
         self.env.transfer(depositor, self.env.current_contract_address(), token, amount)
@@ -77,6 +96,8 @@ class Escrow:
         self.storage.set("amount", amount)
         self.storage.set("judge", judge)
         self.storage.set("deadline", self.env.ledger().timestamp() + timeout)
+        self.storage.set("fee_bps", fee_bps)
+        self.storage.set("fee_collector", fee_collector)
         self.storage.set("settled", False)
         self.storage.set("init", True)
 
@@ -103,11 +124,21 @@ class Escrow:
         provider = self.storage.get("provider")
         token = self.storage.get("token")
         amount = self.storage.get("amount")
-        self.env.transfer(self.env.current_contract_address(), provider, token, amount)
+
+        # Skim the protocol fee off the top; the provider is paid the remainder.
+        fee_bps = self.storage.get("fee_bps", I128(0))
+        fee = amount * fee_bps / I128(10000)
+        net = amount - fee
+
+        contract_addr = self.env.current_contract_address()
+        self.env.transfer(contract_addr, provider, token, net)
+        if fee > I128(0):
+            fee_collector = self.storage.get("fee_collector")
+            self.env.transfer(contract_addr, fee_collector, token, fee)
 
         self.storage.set("settled", True)
         self.storage.set("evidence_root", evidence_root)
-        self.env.emit_event("escrow_released", {"provider": provider, "amount": amount})
+        self.env.emit_event("escrow_released", {"provider": provider, "amount": net, "fee": fee})
         return True
 
     @external
@@ -144,19 +175,28 @@ class Escrow:
         token = self.storage.get("token")
         amount = self.storage.get("amount")
 
+        # The swarm splits the NET bounty (locked amount minus the protocol fee);
+        # the caller-supplied amounts must therefore sum to `net`, not `amount`.
+        fee_bps = self.storage.get("fee_bps", I128(0))
+        fee = amount * fee_bps / I128(10000)
+        net = amount - fee
+
         total = I128(0)
         for i in range(n):
             total = total + amounts[i]
-        if total != amount:
+        if total != net:
             raise ContractError.BAD_SPLIT
 
         contract_addr = self.env.current_contract_address()
         for i in range(n):
             self.env.transfer(contract_addr, recipients[i], token, amounts[i])
+        if fee > I128(0):
+            fee_collector = self.storage.get("fee_collector")
+            self.env.transfer(contract_addr, fee_collector, token, fee)
 
         self.storage.set("settled", True)
         self.storage.set("evidence_root", evidence_root)
-        self.env.emit_event("escrow_split", {"recipients": n, "amount": amount})
+        self.env.emit_event("escrow_split", {"recipients": n, "amount": net, "fee": fee})
         return True
 
     @external
@@ -191,5 +231,6 @@ class Escrow:
         details.set(Symbol("amount"), self.storage.get("amount"))
         details.set(Symbol("judge"), self.storage.get("judge"))
         details.set(Symbol("deadline"), self.storage.get("deadline"))
+        details.set(Symbol("fee_bps"), self.storage.get("fee_bps", I128(0)))
         details.set(Symbol("settled"), self.storage.get("settled", False))
         return details

@@ -23,10 +23,10 @@ def _to_bytes(value: Any) -> bytes:
 
 class MemoryAnchorClient:
     def __init__(self, context, anchor_address: Optional[str] = None):
-        from mycelium_sdk.constants import MEMORY_ANCHOR_ADDRESS
+        from mycelium_sdk.constants import contract_address
 
         self.context = context
-        self.anchor_address = anchor_address or MEMORY_ANCHOR_ADDRESS
+        self.anchor_address = anchor_address or contract_address("memory_anchor", getattr(self.context, "network_type", "testnet"))
 
     def set_anchor(self, memory_root: bytes, uri: str, acl: bytes = b"") -> int:
         """

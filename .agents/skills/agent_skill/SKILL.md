@@ -3,9 +3,9 @@ name: agent-skill
 description: Setup Mycelium environment, install SDK/CLI, configure wallets, resolve network congestion, and scaffold autonomous agent loops.
 ---
 
-# Mycelium Agent Skill (v0.4.3)
+# Mycelium Agent Skill (v0.5.0)
 
-This skill guides a code-execution agent (like Claude Code, Antigravity, or other IDE-bound assistants) to setup the Mycelium autonomous agent runtime on Stellar Testnet, resolve developer environmental errors, program stateless loop integrations, and use the Proof Layer Job Board.
+This skill guides a code-execution agent (like Claude Code, Antigravity, or other IDE-bound assistants) to setup the Mycelium autonomous agent runtime on Stellar, resolve developer environmental errors, program stateless loop integrations, and use the Proof Layer Job Board.
 
 ---
 
@@ -23,7 +23,7 @@ source venv/bin/activate
 ### 2. Installing the Metapackage
 ```bash
 pip install --upgrade pip
-pip install mycelium-stellar==0.4.3
+pip install mycelium-stellar==0.5.0
 ```
 *Edge Case: `mycelium-stellar` fails to compile some C extensions (e.g. cryptography).*
 * Troubleshooting: Ensure build-essential package compiler is installed. On Debian/Ubuntu: `sudo apt-get install build-essential python3-dev libssl-dev libffi-dev`.
@@ -36,18 +36,19 @@ mycelium init
 
 ---
 
-## 🌐 Soroban Testnet Contract Addresses
+## 🌐 Soroban Contract Addresses (Multi-Network)
 
-Below are the default contract deployment addresses for Mycelium core modules on the **Stellar Testnet**. Execution agents can read these addresses directly to query state or submit transactions:
+Below are the contract deployment addresses for Mycelium core modules on both **Stellar Testnet** and **Stellar Mainnet**. When invoking mainnet, CLI commands should use the `--mainnet` or `-m` flag, and Python scripts should initialize `AgentContext` with `network_type="mainnet"`.
 
-| Contract Module | Purpose | Soroban Contract ID |
-|---|---|---|
-| **Hive Registry** | Global registry mapping agent unique names to endpoints & reputation | `CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC` |
-| **Job Board** | Sovereign Job Board (P1.5 proof-layer) for posting and claiming bounties | `CDASJ42STDU42QXDXH3KRFNQWBURB54XPXV2WBXHWGPBA2BNAI5EYULO` |
-| **Verifier Registry** | Staked judge pool registry verifying accuracy and staking settlements | `CBFELTFVBRGR5Y4VHOGFUJLNMMRDNBAOTTZUKZ3SNT625GDB4T76OHMC` |
-| **Reputation Registry** | On-chain reputation store mapping scores and tracking agent performance | `CCTJCC5FELB4PSXT3OF4QSFKH456OIVHF3YGY7ABNFH7ITL7XWYBO2NE` |
-| **Memory Anchor** | Compact on-chain commitment anchor for tracking off-chain memory | `CAC27VKJEPDJJNI36NP7D7VH6WCHT6N5EITKSKPZIQNWA2VPEPBIXJSB` |
-| **Native XLM SAC** | Stellar Asset Contract (SAC) for native XLM token payments | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
+| Contract Module | Purpose | Soroban Testnet ID | Soroban Mainnet ID |
+|---|---|---|---|
+| **Hive Registry** | Global registry mapping agent unique names to endpoints & reputation | `CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC` | `CCFGTAAVOCU2VQNNQUJQQI3YET27PTM3GADCBYDLA6DISXUPR5CGRS5T` |
+| **Job Board** | Sovereign Job Board (P1.5 proof-layer) for posting and claiming bounties | `CDASJ42STDU42QXDXH3KRFNQWBURB54XPXV2WBXHWGPBA2BNAI5EYULO` | `CABB4SSGE5NFOCH6KE4RNCA2MGHSQIFXUKS7OZ4B4GQOEJK6R4ZMP4LG` |
+| **Verifier Registry** | Staked judge pool registry verifying accuracy and staking settlements | `CBFELTFVBRGR5Y4VHOGFUJLNMMRDNBAOTTZUKZ3SNT625GDB4T76OHMC` | `CA574F2GDVGJSITE52TFON7MA66HB6EC2IVPMXPO5OUWDAPJ5JVCSQHC` |
+| **Reputation Registry** | On-chain reputation store mapping scores and tracking agent performance | `CCTJCC5FELB4PSXT3OF4QSFKH456OIVHF3YGY7ABNFH7ITL7XWYBO2NE` | `CB44VUD27BJN4R2VVUONP63TQ5LG523XPV4TKFF7CLC3MQBHI7DYKRBP` |
+| **Memory Anchor** | Compact on-chain commitment anchor for tracking off-chain memory | `CAC27VKJEPDJJNI36NP7D7VH6WCHT6N5EITKSKPZIQNWA2VPEPBIXJSB` | `CDFXP42NITRLDGYUMJ5OT63EVWBROJTCXQR64GUSDWHY2LH3AQM2TXYP` |
+| **Native XLM SAC** | Stellar Asset Contract (SAC) for native XLM token payments | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` | `CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA` |
+| **Escrow WASM Template** | Template used to instantiate conditional escrows at runtime | `df39861bdd6a838826acb7fc9d965563ab166d5d15cd83cc9a8671448e0696ee` | `df39861bdd6a838826acb7fc9d965563ab166d5d15cd83cc9a8671448e0696ee` |
 
 ---
 
@@ -88,37 +89,40 @@ Use this exact programmatic framework to build a Python script (`agent_loop.py`)
 import os
 import sys
 from mycelium import AgentContext, HiveClient, run_agent_loop, ContractTool
+from mycelium.constants import contract_address
 
-# Retrieve decryption key from environment or fail early
+# Retrieve decryption key and target network from environment
 passphrase = os.getenv("MYCELIUM_DECRYPT_KEY")
+network = os.getenv("MYCELIUM_NETWORK", "testnet")
+
 if not passphrase:
     print("[Error] MYCELIUM_DECRYPT_KEY environment variable is required.", file=sys.stderr)
     sys.exit(1)
 
 try:
-    # 1. Initialize encrypted context (decrypted only in memory)
-    context = AgentContext(".mycelium/wallet.json", passphrase=passphrase)
+    # 1. Initialize encrypted context (resolves correct RPC node for network)
+    context = AgentContext(".mycelium/wallet.json", passphrase=passphrase, network_type=network)
     hive = HiveClient(context)
-    print(f"[Success] Loaded wallet address: {context.keypair.public_key}")
+    print(f"[Success] Loaded wallet address: {context.keypair.public_key} on {network}")
 except Exception as e:
     print(f"[Fatal] Failed to decrypt wallet: {e}", file=sys.stderr)
     sys.exit(1)
 
 # 2. Define the contract tools for the agent
-# Counter contract deployed on Testnet
-counter_contract = "CDASJ42STDU42QXDXH3KRFNQWBURB54XPXV2WBXHWGPBA2BNAI5EYULO"
+# Resolves the correct registry or contract address based on the target network
+hive_registry = contract_address("hive_registry", network)
 
 tools = [
     ContractTool(
-        function_name="increment",
-        description="Calls the increment state function on the contract. Requires transaction gas fee.",
-        contract_id=counter_contract
+        function_name="register_agent",
+        description="Registers an agent name mapping to a capability hash and callback endpoint.",
+        contract_id=hive_registry
     ),
     ContractTool(
-        function_name="get_count",
+        function_name="resolve_agent",
         read_only=True,
-        description="Reads the current total count state. Read-only.",
-        contract_id=counter_contract
+        description="Resolves an agent name on-chain to retrieve its capability hash, endpoint, and reputation.",
+        contract_id=hive_registry
     )
 ]
 
@@ -126,7 +130,7 @@ tools = [
 try:
     print("Starting agent execution loop...")
     final_output = run_agent_loop(
-        goal="Increment the counter, check if it succeeded, and report the new total.",
+        goal="Register my agent name 'my_agent_007' on the hive registry, verify that it was successfully registered, and report its endpoint.",
         context=context,
         provider="gemini", # Supports "gemini" (default) or "anthropic"
         tools=tools,

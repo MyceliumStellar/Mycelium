@@ -45,12 +45,19 @@ class EscrowPaymentRouter:
         judge: str,
         token: str | None = None,
         timeout_seconds: int = DEFAULT_ESCROW_TIMEOUT_SECONDS,
+        fee_bps: int | None = None,
+        fee_collector: str | None = None,
     ) -> str:
         """
         Deploy an escrow instance and lock `amount_xlm` payable to `provider_id`,
         releasable when `judge` authorizes it on a passing verdict
         (`release_funds` / `split_release`). The depositor may refund after
         `timeout_seconds` if no release happens.
+
+        `fee_bps` / `fee_collector` set the protocol take-rate skimmed on release
+        (basis points → the treasury). Both default to the deployment's configured
+        `PROTOCOL_FEE_BPS` / `PROTOCOL_FEE_COLLECTOR` (0 = fee off). When the fee
+        is 0 the collector is irrelevant and defaults to the depositor.
 
         Returns the deployed escrow contract address. `token` defaults to the
         network's native-XLM Stellar Asset Contract.
@@ -86,20 +93,47 @@ class EscrowPaymentRouter:
         if not judge:
             raise ValueError("create_locked_escrow requires a judge address (the release authority).")
 
-        token = token or native_token_address(self.context.network_type)
+        token = token or native_token_address(getattr(self.context, "network_type", "testnet"))
         depositor = self.context.keypair.public_key
 
+        # Resolve the protocol fee (deployment default unless overridden here).
+        from mycelium_sdk.constants import (
+            PROTOCOL_FEE_BPS,
+            protocol_fee_collector,
+            MAX_FEE_BPS,
+        )
+
+        fee_bps = PROTOCOL_FEE_BPS if fee_bps is None else int(fee_bps)
+        if fee_bps < 0 or fee_bps > MAX_FEE_BPS:
+            raise ValueError(
+                f"fee_bps must be between 0 and {MAX_FEE_BPS} (got {fee_bps})."
+            )
+        # A non-zero fee needs a real collector; a zero fee never pays out, so the
+        # depositor stands in as a valid (never-credited) placeholder address.
+        if fee_bps > 0:
+            collector = fee_collector or protocol_fee_collector(getattr(self.context, "network_type", "testnet"))
+            if not collector:
+                raise ValueError(
+                    "A non-zero protocol fee requires a fee_collector (set "
+                    "MYCELIUM_FEE_COLLECTOR or pass fee_collector=)."
+                )
+        else:
+            collector = fee_collector or depositor
+
+        fee_note = f", fee {fee_bps}bps→{collector[:6]}…" if fee_bps else ""
         print(
             f"[x402] Deploying escrow + locking {amount_xlm} XLM for "
-            f"provider {provider_id} (judge {judge[:6]}…)..."
+            f"provider {provider_id} (judge {judge[:6]}…{fee_note})..."
         )
         escrow_id = self._deploy_escrow_instance()
 
-        # Lock the funds: initialize(depositor, provider, token, amount, judge, timeout).
+        # Lock the funds: initialize(depositor, provider, token, amount, judge,
+        # timeout, fee_bps, fee_collector).
         self.context.call_contract(
             contract_id=escrow_id,
             function_name="initialize",
-            args=[depositor, provider_id, token, amount_stroops, judge, u64(timeout_seconds)],
+            args=[depositor, provider_id, token, amount_stroops, judge,
+                  u64(timeout_seconds), fee_bps, collector],
         )
         print(f"[x402] Escrow live at {escrow_id} (funds locked).")
         return escrow_id
@@ -145,14 +179,23 @@ class EscrowPaymentRouter:
                 f"Swarm shares must sum to 10000 basis points (got {total_bps})."
             )
 
-        # Read the locked amount from the escrow so the split is exact.
+        # Read the locked amount + protocol fee from the escrow so the split is
+        # exact. The swarm splits the NET bounty (locked amount minus the fee);
+        # the fee itself is paid to the collector by the contract, not here.
         details = self.context.call_contract(
             contract_id=escrow_contract_id,
             function_name="get_details",
             args=[],
             read_only=True,
         )
-        amount = int(details["amount"] if isinstance(details, dict) else details[1])
+        if isinstance(details, dict):
+            amount = int(details["amount"])
+            fee_bps = int(details.get("fee_bps", 0) or 0)
+        else:
+            amount = int(details[1])
+            fee_bps = 0
+        fee = amount * fee_bps // 10000
+        net = amount - fee  # what the recipients' amounts must sum to on-chain
 
         recipients = []
         amounts = []
@@ -160,15 +203,16 @@ class EscrowPaymentRouter:
         for i, (recipient, bps) in enumerate(shares):
             recipients.append(recipient)
             if i < len(shares) - 1:
-                pay = amount * int(bps) // 10000
+                pay = net * int(bps) // 10000
                 running += pay
             else:
-                pay = amount - running  # remainder absorbs rounding dust
+                pay = net - running  # remainder absorbs rounding dust
             amounts.append(pay)
 
+        fee_note = f" (−{fee} fee, {fee_bps}bps)" if fee else ""
         print(
-            f"[x402] Splitting {amount} stroops across {len(recipients)} recipients "
-            f"({total_bps} bps)..."
+            f"[x402] Splitting {net} stroops across {len(recipients)} recipients "
+            f"({total_bps} bps){fee_note}..."
         )
         return self.context.call_contract(
             contract_id=escrow_contract_id,

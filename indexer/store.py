@@ -34,11 +34,14 @@ class FirestoreStore:
         min_reputation: int = 0,
         limit: int = 50,
         start_after: Optional[str] = None,
+        network: Optional[str] = None,
     ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         from google.cloud.firestore_v1.base_query import FieldFilter
         from google.cloud.firestore_v1 import Query
 
         q = self.db.collection(AGENTS)
+        if network:
+            q = q.where(filter=FieldFilter("network", "==", network))
         if capability:
             q = q.where(filter=FieldFilter("capability_tags", "array_contains", capability))
         if min_reputation:
@@ -68,11 +71,14 @@ class FirestoreStore:
         min_bounty: int = 0,
         limit: int = 50,
         start_after: Optional[str] = None,
+        network: Optional[str] = None,
     ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         from google.cloud.firestore_v1.base_query import FieldFilter
         from google.cloud.firestore_v1 import Query
 
         q = self.db.collection(JOBS)
+        if network:
+            q = q.where(filter=FieldFilter("network", "==", network))
         if status:
             q = q.where(filter=FieldFilter("status", "==", status))
         if mode:

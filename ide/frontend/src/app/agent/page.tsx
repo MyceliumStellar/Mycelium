@@ -22,6 +22,16 @@ import {
   Plus
 } from "lucide-react";
 
+import {
+  CONTRACT_ADDRESSES,
+  SOROBAN_RPC_URLS,
+  HORIZON_URLS,
+  STELLAR_EXPERT_URLS,
+  NETWORK_PASSPHRASES,
+  detectNetwork,
+  type NetworkType,
+} from "../network-config";
+
 interface ResolvedAgent {
   id: string;
   name: string;
@@ -38,7 +48,7 @@ interface ResolvedAgent {
   description: string;
 }
 
-const REGISTRY_ADDRESS = "CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC";
+const DEFAULT_NETWORK: NetworkType = "testnet";
 const DEFAULT_NAMES = ["myc_6465185c", "myc2_dd9246f1"];
 
 // Hosted off-chain indexer — one call returns every agent with full metadata,
@@ -65,6 +75,14 @@ export default function AgentNetworkPage() {
   const [isResolving, setIsResolving] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
+  // Wallet connection state matching playground
+  const [walletConnected, setWalletConnected] = useState(false);
+  const [walletAddress, setWalletAddress] = useState("");
+  const [walletNetwork, setWalletNetwork] = useState("");
+  const [activeNetwork, setActiveNetwork] = useState<NetworkType>(DEFAULT_NETWORK);
+
+  const REGISTRY_ADDRESS = CONTRACT_ADDRESSES[activeNetwork].hive_registry;
+
   // Central Registry Manager node details
   const registryNode: ResolvedAgent = {
     id: "hive_registry",
@@ -76,10 +94,10 @@ export default function AgentNetworkPage() {
     status: "System Operator",
     address: "Universal Contract ID",
     capabilityHash: "System Registry Core Engine",
-    endpoint: "https://soroban-testnet.stellar.org",
+    endpoint: SOROBAN_RPC_URLS[activeNetwork],
     reputation: 999,
     model: "System Level",
-    description: "The core directory contract of the Mycelium Hivemind. Deployed on Stellar Testnet, it acts as the canonical entry point mapping names to agent details."
+    description: `The core directory contract of the Mycelium Hivemind. Deployed on Stellar ${activeNetwork === "mainnet" ? "Mainnet" : "Testnet"}, it acts as the canonical entry point mapping names to agent details.`
   };
 
   const decodeBytes = (val: any): string => {
@@ -105,7 +123,7 @@ export default function AgentNetworkPage() {
   // Discover unique agent names by scanning registry events on-chain
   const discoverAgentsOnChain = async (): Promise<string[]> => {
     const StellarSdk = await import("@stellar/stellar-sdk");
-    const rpcUrl = "https://soroban-testnet.stellar.org";
+    const rpcUrl = SOROBAN_RPC_URLS[activeNetwork];
     const server = new StellarSdk.rpc.Server(rpcUrl);
 
     // 1. Fetch latest ledger sequence
@@ -192,10 +210,10 @@ export default function AgentNetworkPage() {
     return Array.from(discoveredNames);
   };
 
-  // Connect to Stellar Soroban Testnet RPC and resolve name
+  // Connect to Stellar Soroban RPC and resolve name
   const resolveAgentOnChain = async (name: string) => {
     const StellarSdk = await import("@stellar/stellar-sdk");
-    const rpcUrl = "https://soroban-testnet.stellar.org";
+    const rpcUrl = SOROBAN_RPC_URLS[activeNetwork];
     const server = new StellarSdk.rpc.Server(rpcUrl);
 
     // Create a dummy signing source account for simulation
@@ -206,7 +224,7 @@ export default function AgentNetworkPage() {
 
     const tx = new StellarSdk.TransactionBuilder(source, {
       fee: "100",
-      networkPassphrase: StellarSdk.Networks.TESTNET
+      networkPassphrase: activeNetwork === "mainnet" ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET
     })
       .addOperation(StellarSdk.Operation.invokeContractFunction({
         contract: REGISTRY_ADDRESS,
@@ -278,13 +296,19 @@ export default function AgentNetworkPage() {
   // failure so the caller falls back to the on-chain scan + resolve.
   const loadAgentsFromIndexer = async (): Promise<ResolvedAgent[] | null> => {
     try {
-      const res = await fetch(`${INDEXER_URL}/agents?limit=200`, {
+      const res = await fetch(`${INDEXER_URL}/agents?network=${activeNetwork}&limit=200`, {
         signal: AbortSignal.timeout(6000),
       });
       if (!res.ok) return null;
       const data = await res.json();
-      const list = Array.isArray(data?.agents) ? data.agents : null;
-      if (!list || list.length === 0) return null;
+      const rawList = Array.isArray(data?.agents) ? data.agents : null;
+      if (!rawList || rawList.length === 0) return null;
+
+      const list = rawList.filter((a: any) => {
+        const net = a.network || "testnet";
+        return net === activeNetwork;
+      });
+      if (list.length === 0) return null;
 
       const palette = ["#00f2fe", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444"];
       return list.map((a: any, i: number) => {
@@ -325,10 +349,10 @@ export default function AgentNetworkPage() {
       }
 
       // Fallback: scan registry events on-chain, then resolve each name.
-      let names = [...DEFAULT_NAMES];
+      let names = activeNetwork === "testnet" ? [...DEFAULT_NAMES] : [];
       try {
         const onChainNames = await discoverAgentsOnChain();
-        names = Array.from(new Set([...onChainNames, ...DEFAULT_NAMES]));
+        names = Array.from(new Set([...onChainNames, ...names]));
       } catch (discoveryErr) {
         console.warn("Failed to scan events dynamically, using fallback known names:", discoveryErr);
       }
@@ -379,9 +403,52 @@ export default function AgentNetworkPage() {
     }
   };
 
+  // Connect wallet method using Freighter
+  const connectWallet = async () => {
+    try {
+      const freighter = await import("@stellar/freighter-api");
+      const isConnected = await freighter.isConnected();
+      if (!isConnected) {
+        alert("Freighter extension not found. Please install Freighter from freighter.app.");
+        return;
+      }
+      const addressRes = await freighter.requestAccess();
+      if (addressRes.address) {
+        setWalletAddress(addressRes.address);
+        setWalletConnected(true);
+        const netRes = await freighter.getNetwork();
+        setWalletNetwork(netRes.network || "TESTNET");
+        setActiveNetwork(detectNetwork(netRes.network || "TESTNET"));
+      }
+    } catch (err: any) {
+      console.error(`Wallet connection failed: ${err.message || err}`);
+    }
+  };
+
+  useEffect(() => {
+    // Auto-check Freighter access if already logged in
+    const checkExisting = async () => {
+      try {
+        const freighter = await import("@stellar/freighter-api");
+        const isConnected = await freighter.isConnected();
+        if (isConnected) {
+          const address = await freighter.getAddress();
+          if (address && address.address) {
+            setWalletAddress(address.address);
+            setWalletConnected(true);
+            const netRes = await freighter.getNetwork();
+            setWalletNetwork(netRes.network || "TESTNET");
+            setActiveNetwork(detectNetwork(netRes.network || "TESTNET"));
+          }
+        }
+      } catch (_) {}
+    };
+    checkExisting();
+  }, []);
+
   useEffect(() => {
     loadInitialAgents();
-  }, []);
+  }, [activeNetwork]);
 
   const handleSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -543,13 +610,39 @@ export default function AgentNetworkPage() {
             >docs</Link>
           </nav>
 
-          <Link href="/playground" className="premium-button-primary" style={{
-            padding: "7px 16px",
-            fontSize: "0.76rem",
-            borderRadius: "6px"
-          }}>
-            Launch Playground
-          </Link>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {/* Network Selector Toggle */}
+            <button
+              onClick={() => {
+                const nextNet = activeNetwork === "testnet" ? "mainnet" : "testnet";
+                setActiveNetwork(nextNet);
+              }}
+              style={{
+                background: "rgba(255, 255, 255, 0.04)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: "6px",
+                padding: "7px 12px",
+                fontSize: "0.76rem",
+                color: activeNetwork === "mainnet" ? "#f43f5e" : "var(--accent-cyan)",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                transition: "all 0.2s"
+              }}
+            >
+              <Network size={12} />
+              <span>{activeNetwork === "mainnet" ? "Mainnet" : "Testnet"}</span>
+            </button>
+
+            <Link href="/playground" className="premium-button-primary" style={{
+              padding: "7px 16px",
+              fontSize: "0.76rem",
+              borderRadius: "6px"
+            }}>
+              Launch Playground
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -592,8 +685,130 @@ export default function AgentNetworkPage() {
               fontWeight: 300,
               lineHeight: "1.6"
             }}>
-              Monitor active smart-agents directly from Stellar testnet ledger states. Zero mocks.
+              Monitor active smart-agents directly from Stellar {activeNetwork === "mainnet" ? "Mainnet" : "Testnet"} ledger states. Zero mocks.
             </p>
+          </div>
+
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            {!walletConnected ? (
+              <button 
+                onClick={connectWallet}
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: "6px",
+                  padding: "9px 18px",
+                  color: "#ffffff",
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap"
+                }}
+              >
+                Connect Wallet
+              </button>
+            ) : (
+              <div style={{
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: "6px",
+                padding: "8px 14px",
+                fontSize: "0.82rem",
+                fontFamily: "var(--font-mono)",
+                color: "var(--accent-green)",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
+              }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "var(--accent-green)" }} />
+                {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)} ({walletNetwork})
+              </div>
+            )}
+
+            {/* Create a brand-new agent (in-IDE scaffolding wizard) */}
+            <button
+              onClick={() => setShowCreateModal(true)}
+              style={{
+                background: "linear-gradient(135deg, rgba(139, 92, 246, 0.9), rgba(0, 242, 254, 0.9))",
+                border: "none",
+                borderRadius: "6px",
+                padding: "9px 18px",
+                color: "#000000",
+                fontSize: "0.85rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                whiteSpace: "nowrap"
+              }}
+            >
+              <Plus size={14} /> Create Agent
+            </button>
+          </div>
+        </div>
+
+        <AnimatePresence>
+          {showCreateModal && (
+            <CreateAgentModal onClose={() => setShowCreateModal(false)} />
+          )}
+        </AnimatePresence>
+
+        {/* Registry Address Card */}
+        <div className="premium-card" style={{
+          padding: "20px 24px",
+          borderRadius: "8px",
+          border: "1px solid rgba(0, 242, 254, 0.15)",
+          background: "linear-gradient(135deg, rgba(0, 150, 199, 0.03) 0%, rgba(139, 92, 246, 0.03) 100%)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "16px",
+          marginBottom: "32px"
+        }}>
+          <div>
+            <span style={{
+              fontSize: "0.65rem",
+              fontFamily: "var(--font-mono)",
+              color: "rgba(255, 255, 255, 0.4)",
+              letterSpacing: "1.5px",
+              display: "block",
+              marginBottom: "8px"
+            }}>
+              ON-CHAIN HIVE REGISTRY ADDRESSES
+            </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{
+                  fontSize: "0.62rem", padding: "1px 6px", borderRadius: 3,
+                  background: activeNetwork === "testnet" ? "rgba(0,150,199,0.2)" : "rgba(255,255,255,0.04)",
+                  color: activeNetwork === "testnet" ? "var(--accent-cyan)" : "rgba(255,255,255,0.3)",
+                  fontFamily: "var(--font-mono)", fontWeight: "bold"
+                }}>TESTNET</span>
+                <span style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.8rem",
+                  color: activeNetwork === "testnet" ? "#ffffff" : "rgba(255,255,255,0.4)"
+                }}>
+                  {CONTRACT_ADDRESSES.testnet.hive_registry}
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{
+                  fontSize: "0.62rem", padding: "1px 6px", borderRadius: 3,
+                  background: activeNetwork === "mainnet" ? "rgba(244,63,94,0.2)" : "rgba(255,255,255,0.04)",
+                  color: activeNetwork === "mainnet" ? "#f43f5e" : "rgba(255,255,255,0.3)",
+                  fontFamily: "var(--font-mono)", fontWeight: "bold"
+                }}>MAINNET</span>
+                <span style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.8rem",
+                  color: activeNetwork === "mainnet" ? "#ffffff" : "rgba(255,255,255,0.4)"
+                }}>
+                  {CONTRACT_ADDRESSES.mainnet.hive_registry}
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Search bar */}
@@ -641,68 +856,6 @@ export default function AgentNetworkPage() {
             </button>
           </form>
 
-          {/* Create a brand-new agent (in-IDE scaffolding wizard) */}
-          <button
-            onClick={() => setShowCreateModal(true)}
-            style={{
-              background: "linear-gradient(135deg, rgba(139, 92, 246, 0.9), rgba(0, 242, 254, 0.9))",
-              border: "none",
-              borderRadius: "6px",
-              padding: "9px 18px",
-              color: "#000000",
-              fontSize: "0.85rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              whiteSpace: "nowrap"
-            }}
-          >
-            <Plus size={14} /> Create Agent
-          </button>
-        </div>
-
-        <AnimatePresence>
-          {showCreateModal && (
-            <CreateAgentModal onClose={() => setShowCreateModal(false)} />
-          )}
-        </AnimatePresence>
-
-        {/* Registry Address Card */}
-        <div className="premium-card" style={{
-          padding: "20px 24px",
-          borderRadius: "8px",
-          border: "1px solid rgba(0, 242, 254, 0.15)",
-          background: "linear-gradient(135deg, rgba(0, 150, 199, 0.03) 0%, rgba(139, 92, 246, 0.03) 100%)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: "16px",
-          marginBottom: "32px"
-        }}>
-          <div>
-            <span style={{
-              fontSize: "0.65rem",
-              fontFamily: "var(--font-mono)",
-              color: "rgba(255, 255, 255, 0.4)",
-              letterSpacing: "1.5px",
-              display: "block",
-              marginBottom: "4px"
-            }}>
-              ON-CHAIN HIVE REGISTRY ADDRESS
-            </span>
-            <span style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "clamp(0.75rem, 2vw, 0.95rem)",
-              color: "var(--accent-cyan)",
-              fontWeight: 500,
-              letterSpacing: "0.5px"
-            }}>
-              {REGISTRY_ADDRESS}
-            </span>
-          </div>
           <div style={{ display: "flex", gap: "10px" }}>
             <button 
               onClick={handleCopyAddress}

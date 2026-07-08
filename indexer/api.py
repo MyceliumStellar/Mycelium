@@ -23,7 +23,7 @@ from pydantic import BaseModel
 
 from mycelium_sdk.constants import HIVEMIND_REGISTRY_ADDRESS
 
-app = FastAPI(title="Mycelium Indexer", version="0.4.0")
+app = FastAPI(title="Mycelium Indexer", version="0.5.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -115,9 +115,10 @@ def list_agents(
     min_reputation: int = 0,
     limit: int = Query(50, ge=1, le=200),
     start_after: Optional[str] = None,
+    network: Optional[str] = None,
     store=Depends(get_store),
 ):
-    rows, next_cursor = store.list_agents(capability, min_reputation, limit, start_after)
+    rows, next_cursor = store.list_agents(capability, min_reputation, limit, start_after, network=network)
     return _envelope(store, HIVEMIND_REGISTRY_ADDRESS, agents=rows, next_cursor=next_cursor)
 
 
@@ -136,9 +137,10 @@ def list_jobs(
     min_bounty: int = 0,
     limit: int = Query(50, ge=1, le=200),
     start_after: Optional[str] = None,
+    network: Optional[str] = None,
     store=Depends(get_store),
 ):
-    rows, next_cursor = store.list_jobs(status, mode, min_bounty, limit, start_after)
+    rows, next_cursor = store.list_jobs(status, mode, min_bounty, limit, start_after, network=network)
     return _envelope(store, _board_address(), jobs=rows, next_cursor=next_cursor)
 
 

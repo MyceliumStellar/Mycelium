@@ -5,7 +5,7 @@ terminal interface. Built on **Typer**, it wraps every SDK operation — from
 project scaffolding through compilation, deployment, registration, discovery,
 payments, job boards, and persistent memory — in a single `mycelium` command.
 
-Current version: **0.4.0**
+Current version: **0.5.0**
 
 ---
 
@@ -360,6 +360,19 @@ mycelium verifier withdraw
 
 `slash` and `accuracy` are callable only by the verification market (the
 settlement path), not by ordinary judges.
+
+---
+
+## Release 0.5.0 — Stellar Mainnet Support & Routing Shorthands
+
+Version `0.5.0` introduces complete multi-network capability, enabling targeting of either Stellar Testnet or Stellar Mainnet across all commands:
+
+* **Shops/Endpoints Defaulting:** By default, all commands target the Stellar Testnet unless overridden by command-line flags.
+* **Network Command Flags:** All commands interacting with the Stellar/Soroban network support the following routing flags:
+  * `--network <net>` or `-n <net>`: Specify `"testnet"` or `"mainnet"`.
+  * `--testnet` or `-t`: Shorthand boolean flag to force targeting the Stellar Testnet (default behavior).
+  * `--mainnet` or `-m`: Shorthand boolean flag to route all contract interaction to Stellar Mainnet.
+* **Fee payee target split:** In version `0.5.0`, transaction protocol fees are collected at `myceliummainnet` (Stellar Mainnet) or `myceliumtestnet` (Stellar Testnet).
 
 ---
 
