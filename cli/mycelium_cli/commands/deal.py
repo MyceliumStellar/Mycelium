@@ -97,7 +97,7 @@ def open_deal(
     judge: str = typer.Option(..., "--judge", help="Judge: unique name or G/C address — the release authority"),
     token: str = typer.Option(None, "--token", help="Payment token contract (defaults to native XLM SAC)"),
     timeout: int = typer.Option(DEFAULT_TIMEOUT_SECONDS, "--timeout", help="Refund deadline in seconds"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
     registry: str = typer.Option(None, "--registry", help="Hive Registry id override (for name resolution)"),
 ):
@@ -130,7 +130,7 @@ def open_deal(
 def release(
     escrow_id: str = typer.Argument(..., help="Escrow contract id from `deal open`"),
     evidence: str = typer.Option(..., "--evidence", help="Evidence bundle file/string (its SHA-256 is recorded for audit)"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Judge wallet path (the escrow's release authority)"),
 ):
     network = resolve_network(network, use_testnet, use_mainnet)
@@ -149,7 +149,7 @@ def release(
 @deal_app.command("refund")
 def refund(
     escrow_id: str = typer.Argument(..., help="Escrow contract id from `deal open`"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
 ):
     network = resolve_network(network, use_testnet, use_mainnet)
@@ -168,7 +168,7 @@ def refund(
 @deal_app.command("status")
 def status(
     escrow_id: str = typer.Argument(..., help="Escrow contract id from `deal open`"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
 ):
     network = resolve_network(network, use_testnet, use_mainnet)
     """Show an escrow deal's current state (read-only, no wallet)."""

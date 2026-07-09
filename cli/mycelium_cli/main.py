@@ -26,6 +26,7 @@ from mycelium_cli.commands.jobs import job_app
 from mycelium_cli.commands.deal import deal_app
 from mycelium_cli.commands.memory import memory_app
 from mycelium_cli.commands.verifier import verifier_app
+from mycelium_cli.commands.update import run_update
 
 app = typer.Typer(help="Mycelium Developer Framework CLI")
 # Sovereign Job Boards: `mycelium job post|list|claim|assign|join|submit|finalize|status`
@@ -43,7 +44,7 @@ app.add_typer(verifier_app, name="verifier")
 PASSPHRASE_ENV_VAR = "MYCELIUM_DECRYPT_KEY"
 
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 
 def _version_callback(value: bool):
@@ -61,7 +62,7 @@ def _root(
     ),
 ):
     """Mycelium Developer Framework CLI."""
-    show_startup_banner()
+    show_startup_banner(version=__version__)
     if ctx.invoked_subcommand is None:
         typer.echo(ctx.get_help())
         raise typer.Exit()
@@ -370,6 +371,14 @@ def test(
 ):
     """Dry-run the agent: simulate every on-chain action without signing or spending."""
     run_test(file=file, contract=contract)
+
+
+@app.command()
+def update(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt and upgrade immediately."),
+):
+    """Check for the latest version on PyPI and auto-update."""
+    run_update(yes=yes)
 
 
 def main():

@@ -106,7 +106,7 @@ def _has_ansi_support() -> bool:
     return True
 
 
-def render(color: bool = True) -> str:
+def render(color: bool = True, version: str | None = None) -> str:
     """Return the banner string, with or without ANSI green colouring,
     dynamically scaled to fit the terminal width.
     """
@@ -123,20 +123,22 @@ def render(color: bool = True) -> str:
         art = "[ MYCELIUM ]"
         tagline_pad = " "
 
+    version_line = f"\n{tagline_pad}📦  v{version}" if version else ""
+
     if color:
-        return f"{_GREEN}{art}\n{tagline_pad}{_TAGLINE}{_RESET}\n"
-    return f"{art}\n{tagline_pad}{_TAGLINE}\n"
+        return f"{_GREEN}{art}\n{tagline_pad}{_TAGLINE}{version_line}{_RESET}\n"
+    return f"{art}\n{tagline_pad}{_TAGLINE}{version_line}\n"
 
 
-def print_banner(stream=None) -> None:
+def print_banner(stream=None, version: str | None = None) -> None:
     """Unconditionally write the banner to `stream` (default stderr)."""
     stream = stream or sys.stderr
     color = hasattr(stream, "isatty") and stream.isatty() and _has_ansi_support()
-    stream.write(render(color=color))
+    stream.write(render(color=color, version=version))
     stream.flush()
 
 
-def show_startup_banner(stream=None) -> None:
+def show_startup_banner(stream=None, version: str | None = None) -> None:
     """
     Print the banner once per process, unless MYCELIUM_NO_BANNER is set.
     Used as the 'starting' banner for both the CLI and the SDK runtime.
@@ -149,4 +151,4 @@ def show_startup_banner(stream=None) -> None:
     # the banner alongside informational logs, for production agents.
     if os.environ.get("MYCELIUM_NO_BANNER") or os.environ.get("MYCELIUM_QUIET"):
         return
-    print_banner(stream=stream)
+    print_banner(stream=stream, version=version)

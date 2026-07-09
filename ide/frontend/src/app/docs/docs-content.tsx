@@ -473,6 +473,7 @@ export default function DocsContent({ slug: rawSlug }: { slug: string }) {
       { id: "proof-verifiers", label: "Verifiers & Staking" }
     ],
     "changelog": [
+      { id: "v051", label: "0.5.1" },
       { id: "v050", label: "0.5.0" },
       { id: "v043", label: "0.4.3" },
       { id: "v042", label: "0.4.2" },
@@ -1735,6 +1736,20 @@ capabilities          = ["price-feed", "usd-xlm"]`}
               code="mycelium doctor"
             />
             <P><em>Flags:</em> <InlineCode>--network &lt;net&gt;</InlineCode> (network to test).</P>
+
+            <SectionH3>mycelium update</SectionH3>
+            <P>Queries PyPI for the latest published version of <InlineCode>mycelium-stellar</InlineCode>, compares it against the currently installed version, and auto-upgrades all packages via <InlineCode>pip install --upgrade</InlineCode>.</P>
+            <P>Check for updates interactively:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium update"
+            />
+            <P>Auto-upgrade without confirmation prompt:</P>
+            <CodeBlock
+              language="bash"
+              code="mycelium update --yes"
+            />
+            <P><em>Flags:</em> <InlineCode>--yes</InlineCode> / <InlineCode>-y</InlineCode> (skip confirmation prompt and upgrade immediately).</P>
           </>
         );
 
@@ -2405,6 +2420,31 @@ mycelium agent reputation --address GABCDEF123...`}
             <P>
               All notable changes to the Mycelium framework (SDK, CLI, compiler, and Web IDE) are documented here.
             </P>
+
+            <SectionH2 id="v051">Version 0.5.1 — Version Banner, Self-Update & Syntax Fixes</SectionH2>
+            <P><strong>Released on 2026-07-09</strong></P>
+            <P>
+              Patch release focused on developer experience: the CLI startup banner now displays the installed version, a new <InlineCode>mycelium update</InlineCode> command enables one-command self-updating from PyPI, and critical syntax errors in the published 0.5.0 CLI package have been fixed.
+            </P>
+
+            <SectionH3>New Features</SectionH3>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>Version Banner:</strong> The MYCELIUM ASCII startup banner now always shows the current version (e.g. <InlineCode>📦  v0.5.1</InlineCode>) below the tagline, making it easy to identify which version is running at a glance.</li>
+              <li><strong><InlineCode>mycelium update</InlineCode> Command:</strong> New CLI command that queries PyPI for the latest <InlineCode>mycelium-stellar</InlineCode> release, compares versions, and auto-upgrades via <InlineCode>pip install --upgrade</InlineCode>. Supports <InlineCode>--yes</InlineCode> / <InlineCode>-y</InlineCode> flag to skip confirmation for CI/scripted use.</li>
+              <li><strong>Syntax Error Fixes:</strong> Fixed trailing <InlineCode>{`")"`}</InlineCode> syntax errors in CLI parameter declarations across <InlineCode>jobs.py</InlineCode>, <InlineCode>deal.py</InlineCode>, and <InlineCode>memory.py</InlineCode> that caused <InlineCode>SyntaxError</InlineCode> on import in the published PyPI 0.5.0 package.</li>
+            </ul>
+
+            <SectionH3>SDK Changes</SectionH3>
+            <ul style={{ paddingLeft: 20, color: "rgba(255,255,255,0.65)", fontSize: "0.92rem", lineHeight: 1.8, marginBottom: 24 }}>
+              <li><strong>Banner API Extension:</strong> <InlineCode>show_startup_banner()</InlineCode>, <InlineCode>print_banner()</InlineCode>, and <InlineCode>render()</InlineCode> now accept an optional <InlineCode>version</InlineCode> parameter to include version info in the banner output.</li>
+              <li><strong>Version Bump:</strong> All packages bumped to <InlineCode>0.5.1</InlineCode> (<InlineCode>mycelium-stellar</InlineCode>, <InlineCode>mycelium-cli</InlineCode>, <InlineCode>mycelium-sdk</InlineCode>, <InlineCode>mycelium-compiler</InlineCode>).</li>
+            </ul>
+
+            <SectionH3>Update Command Usage</SectionH3>
+            <CodeBlock
+              language="bash"
+              code={`# Check for updates and upgrade interactively\nmycelium update\n\n# Auto-upgrade without prompting (for CI/scripts)\nmycelium update --yes`}
+            />
 
             <SectionH2 id="v050">Version 0.5.0 — Mainnet Launch & Multi-Network Expansion</SectionH2>
             <P><strong>Released on 2026-07-08</strong></P>

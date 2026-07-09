@@ -115,7 +115,7 @@ def post(
 @job_app.command("list")
 def list_jobs(
     status: str = typer.Option(None, "--status", help="Filter: open | claimed | submitted | done | cancelled"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
     network = resolve_network(network, use_testnet, use_mainnet)
@@ -136,7 +136,7 @@ def list_jobs(
 @job_app.command("claim")
 def claim(
     job_id: int = typer.Argument(..., help="Job id to claim"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
@@ -151,7 +151,7 @@ def claim(
 def assign(
     job_id: int = typer.Argument(..., help="Job id to assign"),
     agent: str = typer.Option(..., "--agent", help="Agent unique name (Hive Registry) or G/C address"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
     registry: str = typer.Option(None, "--registry", help="Hive Registry id override (for name resolution)"),
@@ -169,7 +169,7 @@ def join(
     job_id: int = typer.Argument(..., help="Job id to join"),
     capability: str = typer.Option(..., "--capability", help="Capability tag you bring to the swarm"),
     share: int = typer.Option(..., "--share", help="Agreed bounty share in basis points (sum to 10000)"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
@@ -188,7 +188,7 @@ def submit(
     job_id: int = typer.Argument(..., help="Job id"),
     evidence: str = typer.Option(..., "--evidence", help="Deliverable file/string; its SHA-256 is anchored as the evidence_root"),
     uri: str = typer.Option("", "--uri", help="Optional pointer to the full bundle (recorded on-chain)"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Agent wallet path"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
@@ -205,7 +205,7 @@ def do_job(
     model: str = typer.Option(..., "--model", help="The agent's model 'provider:model' (nvidia/groq)"),
     claim: bool = typer.Option(True, "--claim/--no-claim", help="Self-claim the job first (single mode)"),
     no_revise: bool = typer.Option(False, "--no-revise", help="Single pass (skip the self-review pass)"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Agent wallet path"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
@@ -226,7 +226,7 @@ def do_job(
 def judge_job(
     job_id: int = typer.Argument(..., help="Job id to judge"),
     deliverable: str = typer.Option(..., "--deliverable", help="The deliverable text/file to score (what the agent produced)"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Judge wallet path"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
@@ -259,7 +259,7 @@ def verdict(
     evidence: str = typer.Option(..., "--evidence", help="The same evidence bundle file/string the worker submitted"),
     passed: bool = typer.Option(None, "--pass/--fail", help="Whether the deliverable met the checks"),
     score: int = typer.Option(None, "--score", help="Numeric score 0-100 to record (defaults 100 on pass, 0 on fail)"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Judge wallet path"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
@@ -280,7 +280,7 @@ def verdict(
 @job_app.command("finalize")
 def finalize(
     job_id: int = typer.Argument(..., help="Job id"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Poster wallet path"),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
@@ -294,7 +294,7 @@ def finalize(
 @job_app.command("status")
 def status(
     job_id: int = typer.Argument(..., help="Job id"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     board: str = typer.Option(None, "--board", help="JobBoard contract id override"),
 ):
     network = resolve_network(network, use_testnet, use_mainnet)

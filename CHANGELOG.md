@@ -2,6 +2,31 @@
 
 All notable changes to the Mycelium developer framework and smart contracts will be documented in this file.
 
+## [0.5.1] — 2026-07-09
+
+Patch release with developer experience improvements: startup banner version display, self-update command, and syntax error fixes for PyPI package integrity.
+
+### 💻 Command Line Interface (CLI)
+* **Version Banner:** The startup ASCII banner now always displays the current installed version (e.g. `📦  v0.5.1`) below the tagline, so developers can identify their version at a glance.
+* **`mycelium update` Command:** Added a new self-update command that queries PyPI for the latest `mycelium-stellar` release, compares versions, and auto-upgrades via `pip install --upgrade`. Supports `--yes` / `-y` to skip the confirmation prompt for CI/scripted use.
+* **Syntax Error Fixes:** Fixed trailing `")` syntax errors in CLI parameter declarations across `jobs.py`, `deal.py`, and `memory.py` that caused `SyntaxError: unterminated string literal` on import.
+
+---
+
+### 📦 Python SDK
+* **Banner API Extension:** `show_startup_banner()`, `print_banner()`, and `render()` now accept an optional `version` parameter to include the version string in the banner output.
+* **Version Bump:** SDK `__version__` updated from `0.4.0` to `0.5.1`.
+
+---
+
+### 📋 Package Versions
+* `mycelium-stellar`: `0.5.0` → `0.5.1`
+* `mycelium-cli`: `0.5.0` → `0.5.1`
+* `mycelium-sdk`: `0.5.0` → `0.5.1`
+* `mycelium-compiler`: `0.5.0` → `0.5.1`
+
+---
+
 ## [0.5.0] — 2026-07-08
 
 This is the official **Mainnet Release** of the Mycelium Developer Framework, upgrading all contracts, the SDK, CLI, Web IDE, and Indexer for the Stellar Public Network (Mainnet).

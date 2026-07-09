@@ -79,7 +79,7 @@ def remember(
     tags: List[str] = typer.Option(None, "--tag", "-t", help="Tag(s) for the memory (repeatable)"),
     backend: str = typer.Option("local", "--backend", help="local or supermemory"),
     anchor: str = typer.Option(None, "--anchor", help="MemoryAnchor contract id override"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path (identifies the memory owner)"),
 ):
     network = resolve_network(network, use_testnet, use_mainnet)
@@ -94,7 +94,7 @@ def recall(
     query: str = typer.Argument(..., help="What to search memory for"),
     k: int = typer.Option(5, "-k", help="Number of results"),
     backend: str = typer.Option("local", "--backend", help="local or supermemory"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path (identifies the memory owner)"),
 ):
     network = resolve_network(network, use_testnet, use_mainnet)
@@ -117,7 +117,7 @@ def anchor(
     publish: str = typer.Option(None, "--publish", help="Write the canonical blob to this file and anchor file://<path>"),
     backend: str = typer.Option("local", "--backend", help="local or supermemory"),
     anchor: str = typer.Option(None, "--anchor", help="MemoryAnchor contract id override"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
 ):
     network = resolve_network(network, use_testnet, use_mainnet)
@@ -150,7 +150,7 @@ def anchor(
 def verify(
     backend: str = typer.Option("local", "--backend", help="local or supermemory"),
     anchor: str = typer.Option(None, "--anchor", help="MemoryAnchor contract id override"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
 ):
     network = resolve_network(network, use_testnet, use_mainnet)
@@ -173,7 +173,7 @@ def verify(
 def rehydrate(
     backend: str = typer.Option("local", "--backend", help="local or supermemory"),
     anchor: str = typer.Option(None, "--anchor", help="MemoryAnchor contract id override"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
 ):
     network = resolve_network(network, use_testnet, use_mainnet)
@@ -191,7 +191,7 @@ def rehydrate(
 def status(
     backend: str = typer.Option("local", "--backend", help="local or supermemory"),
     anchor: str = typer.Option(None, "--anchor", help="MemoryAnchor contract id override"),
-    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True)"),
+    network: str = typer.Option(None, "--network", "-n", help="Network: testnet or mainnet (defaults to mycelium.toml)"), use_testnet: bool = typer.Option(False, "--testnet", "-t", help="Use Stellar testnet", is_flag=True), use_mainnet: bool = typer.Option(False, "--mainnet", "-m", help="Use Stellar mainnet", is_flag=True),
     wallet: str = typer.Option(DEFAULT_WALLET_PATH, help="Wallet path"),
 ):
     network = resolve_network(network, use_testnet, use_mainnet)
