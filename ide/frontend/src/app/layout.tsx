@@ -4,6 +4,22 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Mycelium | Python Agent Framework on Stellar",
   description: "The Python-first framework for creating autonomous agents that discover, coordinate, and transact on Stellar.",
+  icons: {
+    icon: "/mycelium-logo.png",
+    shortcut: "/mycelium-logo.png",
+    apple: "/mycelium-logo.png",
+  },
+  openGraph: {
+    title: "Mycelium | Python Agent Framework on Stellar",
+    description: "The Python-first framework for creating autonomous agents that discover, coordinate, and transact on Stellar.",
+    images: ["/mycelium-logo.png"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Mycelium | Python Agent Framework on Stellar",
+    description: "The Python-first framework for creating autonomous agents that discover, coordinate, and transact on Stellar.",
+    images: ["/mycelium-logo.png"],
+  },
 };
 
 export default function RootLayout({
