@@ -196,6 +196,36 @@ To optimize transaction fees and ledger capacity, Mycelium divides resources bet
 
 ---
 
+## 📜 Contract Addresses
+
+Mycelium contracts are deployed and verified on both Stellar Testnet and Stellar Mainnet (Public network). Below is the canonical registry of these core subsystem contracts with links to the Stellar Expert blockchain explorer:
+
+### Stellar Testnet Contracts
+
+| Contract / Artifact | Stellar Testnet Address | Explorer Link |
+| :--- | :--- | :--- |
+| **Hive Registry** | `CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC` | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC) |
+| **Job Board** | `CDASJ42STDU42QXDXH3KRFNQWBURB54XPXV2WBXHWGPBA2BNAI5EYULO` | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDASJ42STDU42QXDXH3KRFNQWBURB54XPXV2WBXHWGPBA2BNAI5EYULO) |
+| **Memory Anchor** | `CAC27VKJEPDJJNI36NP7D7VH6WCHT6N5EITKSKPZIQNWA2VPEPBIXJSB` | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CAC27VKJEPDJJNI36NP7D7VH6WCHT6N5EITKSKPZIQNWA2VPEPBIXJSB) |
+| **Verifier Registry** | `CBFELTFVBRGR5Y4VHOGFUJLNMMRDNBAOTTZUKZ3SNT625GDB4T76OHMC` | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CBFELTFVBRGR5Y4VHOGFUJLNMMRDNBAOTTZUKZ3SNT625GDB4T76OHMC) |
+| **Reputation Registry** | `CCTJCC5FELB4PSXT3OF4QSFKH456OIVHF3YGY7ABNFH7ITL7XWYBO2NE` | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CCTJCC5FELB4PSXT3OF4QSFKH456OIVHF3YGY7ABNFH7ITL7XWYBO2NE) |
+| **Native SAC Token** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC) |
+| **Escrow WASM Template Hash** | `df39861bdd6a838826acb7fc9d965563ab166d5d15cd83cc9a8671448e0696ee` | [View on Stellar Expert](https://stellar.expert/explorer/testnet/contract/df39861bdd6a838826acb7fc9d965563ab166d5d15cd83cc9a8671448e0696ee) |
+
+### Stellar Mainnet (Public) Contracts
+
+| Contract / Artifact | Stellar Mainnet Address | Explorer Link |
+| :--- | :--- | :--- |
+| **Hive Registry** | `CCFGTAAVOCU2VQNNQUJQQI3YET27PTM3GADCBYDLA6DISXUPR5CGRS5T` | [View on Stellar Expert](https://stellar.expert/explorer/public/contract/CCFGTAAVOCU2VQNNQUJQQI3YET27PTM3GADCBYDLA6DISXUPR5CGRS5T) |
+| **Job Board** | `CABB4SSGE5NFOCH6KE4RNCA2MGHSQIFXUKS7OZ4B4GQOEJK6R4ZMP4LG` | [View on Stellar Expert](https://stellar.expert/explorer/public/contract/CABB4SSGE5NFOCH6KE4RNCA2MGHSQIFXUKS7OZ4B4GQOEJK6R4ZMP4LG) |
+| **Memory Anchor** | `CDFXP42NITRLDGYUMJ5OT63EVWBROJTCXQR64GUSDWHY2LH3AQM2TXYP` | [View on Stellar Expert](https://stellar.expert/explorer/public/contract/CDFXP42NITRLDGYUMJ5OT63EVWBROJTCXQR64GUSDWHY2LH3AQM2TXYP) |
+| **Verifier Registry** | `CA574F2GDVGJSITE52TFON7MA66HB6EC2IVPMXPO5OUWDAPJ5JVCSQHC` | [View on Stellar Expert](https://stellar.expert/explorer/public/contract/CA574F2GDVGJSITE52TFON7MA66HB6EC2IVPMXPO5OUWDAPJ5JVCSQHC) |
+| **Reputation Registry** | `CB44VUD27BJN4R2VVUONP63TQ5LG523XPV4TKFF7CLC3MQBHI7DYKRBP` | [View on Stellar Expert](https://stellar.expert/explorer/public/contract/CB44VUD27BJN4R2VVUONP63TQ5LG523XPV4TKFF7CLC3MQBHI7DYKRBP) |
+| **Native SAC Token** | `CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA` | [View on Stellar Expert](https://stellar.expert/explorer/public/contract/CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA) |
+| **Escrow WASM Template Hash** | `df39861bdd6a838826acb7fc9d965563ab166d5d15cd83cc9a8671448e0696ee` | [View on Stellar Expert](https://stellar.expert/explorer/public/contract/df39861bdd6a838826acb7fc9d965563ab166d5d15cd83cc9a8671448e0696ee) ([Upload Tx](https://stellar.expert/explorer/public/tx/9baca5926e5cafca09e4e400f08add08d202ed39affebf59f7b4985f9adbfa65)) |
+
+---
+
 ## 📁 Repository Map
 
 The repository is structured to separate individual components into clean Python packages and visual layers:
