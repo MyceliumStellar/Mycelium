@@ -25,6 +25,8 @@ Mycelium is a comprehensive developer platform designed to eliminate the "Rust t
 * **Web IDE Frontend**: [https://mycelium.isriz.xyz](https://mycelium.isriz.xyz)
 * **Web IDE API Backend**: [https://mycelium-zgez.onrender.com](https://mycelium-zgez.onrender.com)
 * **On-Chain Hive Registry (Stellar Testnet)**: `CCHLAG6L4C6ETKD3ZOYE4GRP3VRUB6A2ES6P52VTENXQURL2VFWXI4XC`
+* **Feedback Form**: [https://docs.google.com/forms/d/e/1FAIpQLScaa5t7RHtY3MFKYFbWpQtb3R5a47iTDyUNqyZN8C6qcXmWtg/viewform](https://docs.google.com/forms/d/e/1FAIpQLScaa5t7RHtY3MFKYFbWpQtb3R5a47iTDyUNqyZN8C6qcXmWtg/viewform)
+
 
 ### PyPI Package Registry Links
 The toolchain is published as modular packages on PyPI:
@@ -547,6 +549,34 @@ To accelerate adoption and build a thriving ecosystem, Mycelium executes a dual-
   * [Subhomoy's Testimonial](https://x.com/Subhomoy77/status/2075240120207519970?s=20)
   * [Abhinav Singh's Testimonial](https://x.com/AbhinavSin93603/status/2075240149471183008?s=20)
   * [Gaurav Karakoti's Testimonial](https://x.com/GauravKara_koti/status/2075237951672582151?s=20)
+* **Overall Developer Feedback & Testimonials Summary**:
+  The raw feedback from developers and builders who tested the framework is saved in the repository at [Mycelium Developer Experience & Product Testimonial (Responses).xlsx](file:///c:/Users/dell/Desktop/Mycelium%20V1/Mycelium%20Developer%20Experience%20&%20Product%20Testimonial%20(Responses).xlsx).
+  
+  #### Quantitative Metrics
+  * **Total Responses**: 27 verified builders
+  * **Average Overall Satisfaction**: **4.74 / 5.0**
+  * **Likelihood to Recommend Mycelium**: **8.89 / 10.0**
+  * **Developer Proficiency Profile**:
+    * *Intermediate (Can read Rust)*: 16 (59.3%)
+    * *Novice (Python only)*: 9 (33.3%)
+    * *Advanced (Comfortable writing Rust)*: 2 (7.4%)
+    
+  #### Key Quotes & Developer Testimonials
+  > [!NOTE]
+  > **Arpan Roy** (Builder):
+  > "Before discovering Mycelium, my biggest friction point was the overall developer experience. Writing contracts was only part of the job—setting up the environment, debugging transactions, testing on local and test networks, and handling deployments were the most time-consuming and frustrating parts of the workflow."
+  
+  > [!NOTE]
+  > **Gaurav Karakoti** (Builder):
+  > "The biggest hurdle of low level languages like Rust is their syntaxes and understanding... python is the complete opposite (its literally plain english)"
+  
+  > [!NOTE]
+  > **Shan Mukherjee** (Builder):
+  > "It addresses one of the biggest friction points in decentralized development: the 'Rust tax.' If you are navigating Web3, smart contracts, or building dApps, Mycelium makes your journey easier... [by] eliminating the 'Rust tax', supporting AI Agent agentic orchestration, providing a streamlined sandbox, and enabling peer-to-peer economic coordination."
+  
+  #### Roadmap Feature Requests
+  * **AI-Assisted Tools**: Automated test generation, AI-powered security auditing, gas optimization suggestions, and AI-assisted debugging tools.
+  * **Developer Experience**: One-click multi-chain deployment, real-time collaboration inside the Web IDE Playground, reusable contract templates, and more beginner-friendly tutorials.
 
 ### Future Plans
 * **Scale Onboarding**: Continue running targeted, hands-on workshops, seminars, and developer bootcamps.
