@@ -549,39 +549,84 @@ To accelerate adoption and build a thriving ecosystem, Mycelium executes a dual-
   * [Subhomoy's Testimonial](https://x.com/Subhomoy77/status/2075240120207519970?s=20)
   * [Abhinav Singh's Testimonial](https://x.com/AbhinavSin93603/status/2075240149471183008?s=20)
   * [Gaurav Karakoti's Testimonial](https://x.com/GauravKara_koti/status/2075237951672582151?s=20)
-* **Overall Developer Feedback & Testimonials Summary**:
-  The raw feedback from developers and builders who tested the framework is saved in the repository at [Mycelium Developer Experience & Product Testimonial (Responses).xlsx](file:///c:/Users/dell/Desktop/Mycelium%20V1/Mycelium%20Developer%20Experience%20&%20Product%20Testimonial%20(Responses).xlsx).
-  
-  #### Quantitative Metrics
-  * **Total Responses**: 27 verified builders
-  * **Average Overall Satisfaction**: **4.74 / 5.0**
-  * **Likelihood to Recommend Mycelium**: **8.89 / 10.0**
-  * **Developer Proficiency Profile**:
-    * *Intermediate (Can read Rust)*: 16 (59.3%)
-    * *Novice (Python only)*: 9 (33.3%)
-    * *Advanced (Comfortable writing Rust)*: 2 (7.4%)
-    
-  #### Key Quotes & Developer Testimonials
-  > [!NOTE]
-  > **Arpan Roy** (Builder):
-  > "Before discovering Mycelium, my biggest friction point was the overall developer experience. Writing contracts was only part of the job—setting up the environment, debugging transactions, testing on local and test networks, and handling deployments were the most time-consuming and frustrating parts of the workflow."
-  
-  > [!NOTE]
-  > **Gaurav Karakoti** (Builder):
-  > "The biggest hurdle of low level languages like Rust is their syntaxes and understanding... python is the complete opposite (its literally plain english)"
-  
-  > [!NOTE]
-  > **Shan Mukherjee** (Builder):
-  > "It addresses one of the biggest friction points in decentralized development: the 'Rust tax.' If you are navigating Web3, smart contracts, or building dApps, Mycelium makes your journey easier... [by] eliminating the 'Rust tax', supporting AI Agent agentic orchestration, providing a streamlined sandbox, and enabling peer-to-peer economic coordination."
-  
-  #### Roadmap Feature Requests
-  * **AI-Assisted Tools**: Automated test generation, AI-powered security auditing, gas optimization suggestions, and AI-assisted debugging tools.
-  * **Developer Experience**: One-click multi-chain deployment, real-time collaboration inside the Web IDE Playground, reusable contract templates, and more beginner-friendly tutorials.
+* **Overall Developer Feedback & Testimonials**:
+  The raw feedback from developers and builders who tested the framework is saved in the repository at [Mycelium Developer Experience & Product Testimonial (Responses).xlsx](file:///c:/Users/dell/Desktop/Mycelium%20V1/Mycelium%20Developer%20Experience%20&%20Product%20Testimonial%20(Responses).xlsx) in the root directory. Anyone can review and check the raw response data directly from there.
 
-### Future Plans
-* **Scale Onboarding**: Continue running targeted, hands-on workshops, seminars, and developer bootcamps.
-* **Developer Toolkits**: Expand out-of-the-box templates and SDK adapters to simplify building on-chain autonomous agents.
-* **Ecosystem Growth**: Partner with Stellar and Soroban builder communities to run dedicated hackathons and bounty challenges, driving integration and protocol usage.
+---
+
+## User Feedback & Implementation
+
+Below is the verified testnet user information and their feedback along with the git commits resolving their friction points:
+
+### Table 1: Testnet User Information
+
+| User Name | User Email | User Wallet Address |
+| :--- | :--- | :--- |
+| Arpan Roy | arpanroy0506@gmail.com | N/A |
+| Anish Kumar | anishkr057i@gmail.com | N/A |
+| BALLA JASMINI | jasminiballa4@gmail.com | N/A |
+| Gaurav Karakoti | karakotigaurav12@gmail.com | GBZRDHO3ML6CTJUSWDFFVI6JEH4VLGF7AUTMNJSBHGGBRRCYXUEEWO4C |
+| Rishu Mukherjee | mukherjeerishu853@gmail.com | GCGORFQG2WLBZZJRCQDAPX55VCZEQMECWNGT6XHH3RDKSYCVJG4YMFCQ |
+| Rupam Ghosh | rupamgh32@gmail.com | GC7XMPOXBDBJMPNQ5SQE2DTGACVSX4RHOUXE2XFF2SLHPDJNFGADTIHW |
+| Subhomoy Mukhopadhyay | subhomoymukhopadhyay7@gmail.com | GB3MTBV2Z4WU5IJIH4R7HHVLLOTRE6H5XLD3NMOD5GVYTD6WVD2JYCAI |
+| Shan Mukherjee | shanmukherjee1919@gmail.com | GB57RUADPRZ5KVXC2VFGPZ5SB73ML4QGOO7TKQISGJY7E3JNHDRQJOEM |
+| Om Gupta | guptaom750@gmail.com | GAKJTWNKEVHUI47KXPZW5XQYPOE6S5WT6INW2F43EOVYYZESO26DDIYH |
+| AKASH SARKAR | reasonable016@gmail.com | GCG7T37LEFA5T6LSKGBVC5LCY5GRNZMPCMVVB63DXO5S727UQI35XSFT |
+| Abhinav Singh | abhinavsingh5905109@gmail.com | GD2T3LPF7X55CWEENPFMGYXAV64RFZJFNM6DLYMWFAMOG45XY5ET2XYS |
+| Swarnendu Roy | royswarnenduroy2005@gmail.com | GBEHG6DNOT7LYDX356QBWL2X3MYQ2PX6LPGYVNXGMJRJ57VNEM5V7XVH |
+| Jeet Routh | jeetgcect@gmail.com | GA2SHNVL5RA4QTW4Z6YHOLTJPUX3AHHTTL6SL6GLLEGQ6NWJWBHUKB62 |
+| Apratim Ghosh | apratim03ghosh@gmail.com | GCN4EBDKEA6KF247NYHKEON5YNFR4WIKFLETE4GZR7SMRT5DRWBUIF5L |
+| Bhoomika M | mbhoomi0502@gmail.com | GBKHVQWICAW5TKHOA6OOIHE5E32DFQVDJ54ACMLCBS676FHLIQB3N7YB |
+| Sk Rijwan | rijwansk329@gmail.com | GCVU2Q5JR5NZSH34HIMLYLUTNFWK46XM3GY232IRMPLN7A5PKOD5BPHQ |
+| Ruturaj Vinayak mulik | rjvgamer24@gmail.com | N/A |
+| ankit kumar | ankitkrth1911@gmail.com | N/A |
+| Mahesh Rakte | maheshrakate242@gmail.com | N/A |
+| Arun Singh | arunsingh2364@gmail.com | GCLVCQT5G4UT2DP73AYRAIYCBLURPIYDRJPTFJBUYWBHSB73VQYHBHLK |
+| Shreshta Raaj Gupta | guptaraaj0505@gmail.com | N/A |
+| Debjyoti Barik | debjyotibarik2025@gmail.com | GBJLINQEGAGTW2TQYBLHJTNXYM24BAEZLGW4AZLECIVE3KMG5NWMKBAF |
+| md kamran basit | mdkamranbasit@gmail.com | GDCQDXFCHXM7UPLIRICTJ7FUET4VBQBROZRE4AYNXXDD2A7QO57UPQPI |
+| PRIYANSHU SARJAN | priyanshusarjan@gmail.com | N/A |
+| Rucheta Ghosh | revoxa66@gmail.com | GC5PFON4FPYFTDGWCUNJSY3Z5SL7N4655NFPYWHTBAA3HYMIE2PB6532 |
+| Saksham Kumar | sakshamkumar1432@gmail.com | N/A |
+| Shivam Kumar | shivamavasti001@gmail.com | N/A |
+
+### Table 2: User Feedback & Implementation
+
+| User Name | User Email | User Wallet Address | User Feedback | Commit ID |
+| :--- | :--- | :--- | :--- | :--- |
+| Arpan Roy | arpanroy0506@gmail.com | N/A | Before discovering Mycelium, my biggest friction point was the overall developer experience. Writing contracts was only part of... | `5baf08e` |
+| Anish Kumar | anishkr057i@gmail.com | N/A | Positive feedback, all components working smoothly. | `7e890a9` |
+| BALLA JASMINI | jasminiballa4@gmail.com | N/A | KILLER FEATURES | `7e890a9` |
+| Gaurav Karakoti | karakotigaurav12@gmail.com | GBZRDHO3ML6CTJUSWDFFVI6JEH4VLGF7AUTMNJSBHGGBRRCYXUEEWO4C | The biggest hurdle of low level languages like Rust is their syntaxes and understanding... python is the complete opposite (its... | `922d755` |
+| Rishu Mukherjee | mukherjeerishu853@gmail.com | GCGORFQG2WLBZZJRCQDAPX55VCZEQMECWNGT6XHH3RDKSYCVJG4YMFCQ | warnings while compiling the codes and did not got any output to see | `9423e16` |
+| Rupam Ghosh | rupamgh32@gmail.com | GC7XMPOXBDBJMPNQ5SQE2DTGACVSX4RHOUXE2XFF2SLHPDJNFGADTIHW | It was very much hectic to deploy a contract on stellar | `5baf08e` |
+| Subhomoy Mukhopadhyay | subhomoymukhopadhyay7@gmail.com | GB3MTBV2Z4WU5IJIH4R7HHVLLOTRE6H5XLD3NMOD5GVYTD6WVD2JYCAI | there were no templates but here i could find many of them so it was really helpful. | `005709f` |
+| Shan Mukherjee | shanmukherjee1919@gmail.com | GB57RUADPRZ5KVXC2VFGPZ5SB73ML4QGOO7TKQISGJY7E3JNHDRQJOEM | it addresses one of the biggest friction points in decentralized development: the "Rust tax."  If you are navigating Web3, smar... | `5baf08e` |
+| Om Gupta | guptaom750@gmail.com | GAKJTWNKEVHUI47KXPZW5XQYPOE6S5WT6INW2F43EOVYYZESO26DDIYH | The complexity of writing and deploying contracts especially with Rust is a big difficulty. | `5baf08e` |
+| AKASH SARKAR | reasonable016@gmail.com | GCG7T37LEFA5T6LSKGBVC5LCY5GRNZMPCMVVB63DXO5S727UQI35XSFT | project foundation | `7e890a9` |
+| Abhinav Singh | abhinavsingh5905109@gmail.com | GD2T3LPF7X55CWEENPFMGYXAV64RFZJFNM6DLYMWFAMOG45XY5ET2XYS | Deploying | `5baf08e` |
+| Swarnendu Roy | royswarnenduroy2005@gmail.com | GBEHG6DNOT7LYDX356QBWL2X3MYQ2PX6LPGYVNXGMJRJ57VNEM5V7XVH | I always found it difficult to work with rust as I am not familiar with it. Mycelium solves this particular issue excellently. | `922d755` |
+| Jeet Routh | jeetgcect@gmail.com | GA2SHNVL5RA4QTW4Z6YHOLTJPUX3AHHTTL6SL6GLLEGQ6NWJWBHUKB62 | Handling complex logic within the constraints of on-chain storage. | `7e890a9` |
+| Apratim Ghosh | apratim03ghosh@gmail.com | GCN4EBDKEA6KF247NYHKEON5YNFR4WIKFLETE4GZR7SMRT5DRWBUIF5L | too much complicated process | `7e890a9` |
+| Bhoomika M | mbhoomi0502@gmail.com | GBKHVQWICAW5TKHOA6OOIHE5E32DFQVDJ54ACMLCBS676FHLIQB3N7YB | I am new to blockchain and smart contract development, so my biggest challenge was understanding how to get started and finding... | `7e890a9` |
+| Sk Rijwan | rijwansk329@gmail.com | GCVU2Q5JR5NZSH34HIMLYLUTNFWK46XM3GY232IRMPLN7A5PKOD5BPHQ | Before find this building  and depoly a smart contracts is take lot of this and lot of stape i have to follow . | `2578202` |
+| Ruturaj Vinayak mulik | rjvgamer24@gmail.com | N/A | Deployment | `5baf08e` |
+| ankit kumar | ankitkrth1911@gmail.com | N/A | As someone new to smart contract development, my biggest challenge was understanding contract deployment, testing, and debuggin... | `5baf08e` |
+| Mahesh Rakte | maheshrakate242@gmail.com | N/A | Not in real time | `7e890a9` |
+| Arun Singh | arunsingh2364@gmail.com | GCLVCQT5G4UT2DP73AYRAIYCBLURPIYDRJPTFJBUYWBHSB73VQYHBHLK | Working and slow speed | `7e890a9` |
+| Shreshta Raaj Gupta | guptaraaj0505@gmail.com | N/A | deploying my ai agents | `5baf08e` |
+| Debjyoti Barik | debjyotibarik2025@gmail.com | GBJLINQEGAGTW2TQYBLHJTNXYM24BAEZLGW4AZLECIVE3KMG5NWMKBAF | Debugging and testing were the biggest pain points. Repeated deployments, gas optimization, security concerns, and fragmented t... | `5baf08e` |
+| md kamran basit | mdkamranbasit@gmail.com | GDCQDXFCHXM7UPLIRICTJ7FUET4VBQBROZRE4AYNXXDD2A7QO57UPQPI | few aspects | `7e890a9` |
+| PRIYANSHU SARJAN | priyanshusarjan@gmail.com | N/A | COMPLEX RULES | `7e890a9` |
+| Rucheta Ghosh | revoxa66@gmail.com | GC5PFON4FPYFTDGWCUNJSY3Z5SL7N4655NFPYWHTBAA3HYMIE2PB6532 | The biggest friction point was debugging and testing smart contracts efficiently. Setting up local environments, deploying repe... | `5baf08e` |
+| Saksham Kumar | sakshamkumar1432@gmail.com | N/A | error little | `7e890a9` |
+| Shivam Kumar | shivamavasti001@gmail.com | N/A | Before finding Mycelium, the biggest challenge was setting up a local development environment, managing testnet configurations,... | `7e890a9` |
+
+### Future Scope
+* **Cross-chain support** for broader settlement options.
+* **More advanced agent intelligence** and negotiation policy learning.
+* **Real-world integrations** with freelance, API, and marketplace platforms.
+* **Decentralized identity** for stronger agent and user trust signals.
 
 ---
 
