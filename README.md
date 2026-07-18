@@ -630,7 +630,13 @@ Below is the verified testnet user information and their feedback along with the
 
 ## Screenshots
 
-*(Screenshots will be added here)*
+<img width="1628" height="809" alt="image" src="https://github.com/user-attachments/assets/43e74313-d677-4fb3-8d61-56dad8009888" />
+
+<img width="970" height="740" alt="image" src="https://github.com/user-attachments/assets/21e0600e-9e5d-4f6a-b62f-58bd52123238" />
+
+<img width="1450" height="769" alt="image" src="https://github.com/user-attachments/assets/d6eab70e-b6a5-4a43-86aa-c033abc37f21" />
+
+<img width="1892" height="868" alt="image" src="https://github.com/user-attachments/assets/0bf6e7de-c817-4626-a77e-abbf331fd030" />
 
 ---
 
