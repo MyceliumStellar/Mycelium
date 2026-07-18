@@ -628,6 +628,10 @@ Below is the verified testnet user information and their feedback along with the
 * **Real-world integrations** with freelance, API, and marketplace platforms.
 * **Decentralized identity** for stronger agent and user trust signals.
 
+## Screenshots
+
+*(Screenshots will be added here)*
+
 ---
 
 ## Documentation Reference Hub
